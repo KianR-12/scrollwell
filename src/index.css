@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; padding: 0; background: #E8E5DE; font-family: 'Inter', sans-serif; }
+/* position:fixed inset:0 is the most reliable full-screen approach on mobile Safari —
+   it always matches the visible viewport regardless of browser chrome / address bar */
+#root {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  max-width: 430px;
+  margin-left: auto;
+  margin-right: auto;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
