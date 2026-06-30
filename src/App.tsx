@@ -3,7 +3,9 @@ import { IconHome, IconCompass, IconBookmark, IconUsers, IconUser } from '@table
 import { HomeTab } from './components/HomeTab'
 import { ExploreTab } from './components/ExploreTab'
 import { DeepDiveTab } from './components/DeepDiveTab'
+import { LibraryTab } from './components/LibraryTab'
 import { useCards } from './useCards'
+import { useSavedCards } from './useSavedCards'
 import type { CardData } from './useCards'
 
 type Tab = 'home' | 'explore' | 'library' | 'friends' | 'profile'
@@ -34,15 +36,37 @@ function AppShell() {
   const [tab, setTab] = useState<Tab>('home')
   const [deepDiveCard, setDeepDiveCard] = useState<CardData | null>(null)
   const { cards, loading } = useCards()
+  const { savedKeys, toggleSave } = useSavedCards()
   const activeIndex = TABS.findIndex(t => t.id === tab)
 
   return (
     <>
       {/* Active screen */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-        {tab === 'home'    && <HomeTab cards={cards} loading={loading} onGoDeeper={setDeepDiveCard} />}
-        {tab === 'explore' && <ExploreTab onGoDeeper={setDeepDiveCard} />}
-        {tab !== 'home' && tab !== 'explore' && <ComingSoon label={TABS.find(t => t.id === tab)!.label} />}
+        {tab === 'home' && (
+          <HomeTab
+            cards={cards}
+            loading={loading}
+            onGoDeeper={setDeepDiveCard}
+            savedKeys={savedKeys}
+            onToggleSave={toggleSave}
+          />
+        )}
+        {tab === 'explore' && (
+          <ExploreTab
+            onGoDeeper={setDeepDiveCard}
+            savedKeys={savedKeys}
+            onToggleSave={toggleSave}
+          />
+        )}
+        {tab === 'library' && (
+          <LibraryTab
+            onToggleSave={toggleSave}
+          />
+        )}
+        {tab !== 'home' && tab !== 'explore' && tab !== 'library' && (
+          <ComingSoon label={TABS.find(t => t.id === tab)!.label} />
+        )}
       </div>
 
       {/* Tab bar */}
@@ -102,7 +126,7 @@ function AppShell() {
         })}
       </div>
 
-      {/* Deep Dive overlay — slides up over everything */}
+      {/* Deep Dive overlay */}
       {deepDiveCard && (
         <DeepDiveTab card={deepDiveCard} onBack={() => setDeepDiveCard(null)} />
       )}

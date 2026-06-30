@@ -7,19 +7,39 @@ interface Props {
   loading: boolean
   onIndexChange?: (index: number) => void
   onGoDeeper?: (card: CardData) => void
+  savedKeys?: Set<string>
+  onToggleSave?: (card: CardData) => void
 }
 
-export function CardSwipeFeed({ cards, loading, onIndexChange, onGoDeeper }: Props) {
+export function CardSwipeFeed({ cards, loading, onIndexChange, onGoDeeper, savedKeys, onToggleSave }: Props) {
   const [index, setIndex] = useState(0)
   const [saved, setSaved] = useState<Set<number>>(new Set())
   const [dragOffset, setDragOffset] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const touchStartY = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
+  const savedInitialized = useRef(false)
 
-  // Reset only when a genuinely new set loads (first card identity changes)
   const firstKey = cards.length > 0 ? `${cards[0].book.title}::${cards[0].book.author}` : '__empty__'
-  useEffect(() => { setIndex(0); setSaved(new Set()) }, [firstKey])
+
+  // Reset on new card set
+  useEffect(() => {
+    setIndex(0)
+    setSaved(new Set())
+    savedInitialized.current = false
+    onIndexChange?.(0)
+  }, [firstKey])
+
+  // Initialize saved state once when savedKeys first arrives (or cards first load)
+  useEffect(() => {
+    if (savedInitialized.current || !savedKeys || cards.length === 0) return
+    savedInitialized.current = true
+    const set = new Set<number>()
+    cards.forEach((card, i) => {
+      if (savedKeys.has(`${card.book.title}::${card.book.author}`)) set.add(i)
+    })
+    setSaved(set)
+  }, [savedKeys, cards.length])
 
   const total = cards.length
 
@@ -111,11 +131,14 @@ export function CardSwipeFeed({ cards, loading, onIndexChange, onGoDeeper }: Pro
                 index={i}
                 total={total}
                 saved={saved.has(i)}
-                onSave={() => setSaved(prev => {
-                  const next = new Set(prev)
-                  next.has(i) ? next.delete(i) : next.add(i)
-                  return next
-                })}
+                onSave={() => {
+                  setSaved(prev => {
+                    const next = new Set(prev)
+                    next.has(i) ? next.delete(i) : next.add(i)
+                    return next
+                  })
+                  onToggleSave?.(card)
+                }}
                 onGoDeeper={() => onGoDeeper?.(card)}
               />
             </div>

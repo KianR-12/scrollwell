@@ -29,9 +29,11 @@ const BATCH = 5
 
 interface ExploreProps {
   onGoDeeper?: (card: CardData) => void
+  savedKeys?: Set<string>
+  onToggleSave?: (card: CardData) => void
 }
 
-export function ExploreTab({ onGoDeeper }: ExploreProps) {
+export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave }: ExploreProps) {
   const [active, setActive] = useState<Category | null>(null)
   const [cards, setCards] = useState<CardData[]>([])
   const [initialLoading, setInitialLoading] = useState(false)
@@ -111,6 +113,8 @@ export function ExploreTab({ onGoDeeper }: ExploreProps) {
         onBack={goBack}
         onGoDeeper={onGoDeeper}
         onCardIndexChange={onCardIndexChange}
+        savedKeys={savedKeys}
+        onToggleSave={onToggleSave}
       />
     )
   }
@@ -171,9 +175,11 @@ interface FeedProps {
   onBack: () => void
   onGoDeeper?: (card: CardData) => void
   onCardIndexChange: (i: number) => void
+  savedKeys?: Set<string>
+  onToggleSave?: (card: CardData) => void
 }
 
-function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error, onBack, onGoDeeper, onCardIndexChange }: FeedProps) {
+function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error, onBack, onGoDeeper, onCardIndexChange, savedKeys, onToggleSave }: FeedProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       {/* Header */}
@@ -238,6 +244,8 @@ function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error
           loading={loading}
           onGoDeeper={onGoDeeper}
           onIndexChange={onCardIndexChange}
+          savedKeys={savedKeys}
+          onToggleSave={onToggleSave}
         />
       )}
     </div>

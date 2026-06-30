@@ -6,9 +6,11 @@ interface Props {
   cards: CardData[]
   loading: boolean
   onGoDeeper?: (card: CardData) => void
+  savedKeys?: Set<string>
+  onToggleSave?: (card: CardData) => void
 }
 
-export function HomeTab({ cards, loading, onGoDeeper }: Props) {
+export function HomeTab({ cards, loading, onGoDeeper, savedKeys, onToggleSave }: Props) {
   const [index, setIndex] = useState(0)
 
   const onIndexChange = useCallback((i: number) => setIndex(i), [])
@@ -53,7 +55,7 @@ export function HomeTab({ cards, loading, onGoDeeper }: Props) {
         }} />
       </div>
 
-      <CardSwipeFeed cards={cards} loading={loading} onIndexChange={onIndexChange} onGoDeeper={onGoDeeper} />
+      <CardSwipeFeed cards={cards} loading={loading} onIndexChange={onIndexChange} onGoDeeper={onGoDeeper} savedKeys={savedKeys} onToggleSave={onToggleSave} />
     </>
   )
 }

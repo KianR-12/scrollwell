@@ -6,6 +6,8 @@ export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 )
 
+export const ANON_USER_ID = '00000000-0000-0000-0000-000000000001'
+
 interface DbRow {
   title: string
   creator: string
@@ -17,6 +19,13 @@ interface DbRow {
   year: number | null
   pages: number | null
   social_count: number
+}
+
+export interface SavedCard {
+  savedId: string
+  card_type: string
+  saved_at: string
+  card: CardData
 }
 
 export function dbRowToCard(row: DbRow): CardData {
@@ -36,7 +45,6 @@ export function dbRowToCard(row: DbRow): CardData {
   }
 }
 
-// Returns a map keyed by "title::creator" for the given titles
 export async function fetchCardsFromDb(titles: string[]): Promise<Map<string, CardData>> {
   if (titles.length === 0) return new Map()
   const { data } = await supabase.from('cards').select('*').in('title', titles)
@@ -47,8 +55,8 @@ export async function fetchCardsFromDb(titles: string[]): Promise<Map<string, Ca
   return map
 }
 
-export async function saveCardToDb(card: CardData, type: string): Promise<void> {
-  await supabase.from('cards').upsert(
+export async function saveCardToDb(card: CardData, type: string): Promise<string | null> {
+  const { data } = await supabase.from('cards').upsert(
     {
       title: card.book.title,
       creator: card.book.author,
@@ -65,5 +73,65 @@ export async function saveCardToDb(card: CardData, type: string): Promise<void> 
       social_count: card.socialCount,
     },
     { onConflict: 'title,creator' }
+  ).select('id').single()
+  return (data as { id: string } | null)?.id ?? null
+}
+
+export async function saveToLibrary(card: CardData, type = 'regular'): Promise<void> {
+  const cardId = await saveCardToDb(card, type)
+  if (!cardId) return
+  await supabase.from('saved_cards').upsert(
+    { user_id: ANON_USER_ID, card_id: cardId, card_type: type },
+    { onConflict: 'user_id,card_id' }
   )
+}
+
+export async function unsaveFromLibrary(card: CardData): Promise<void> {
+  const { data } = await supabase
+    .from('cards')
+    .select('id')
+    .eq('title', card.book.title)
+    .eq('creator', card.book.author)
+    .single()
+  if (!data) return
+  await supabase
+    .from('saved_cards')
+    .delete()
+    .eq('user_id', ANON_USER_ID)
+    .eq('card_id', (data as { id: string }).id)
+}
+
+export async function getSavedKeys(): Promise<Set<string>> {
+  const { data } = await supabase
+    .from('saved_cards')
+    .select('cards!saved_cards_card_id_fkey(title, creator)')
+    .eq('user_id', ANON_USER_ID)
+  const keys = new Set<string>()
+  for (const row of (data ?? []) as any[]) {
+    const c = row.cards
+    if (c) keys.add(`${c.title}::${c.creator}`)
+  }
+  return keys
+}
+
+export async function fetchLibrary(): Promise<SavedCard[]> {
+  const { data } = await supabase
+    .from('saved_cards')
+    .select(`
+      id, card_type, saved_at,
+      cards!saved_cards_card_id_fkey(title, creator, category, hook, hook_sub, gist, isbn, year, pages, social_count)
+    `)
+    .eq('user_id', ANON_USER_ID)
+    .order('saved_at', { ascending: false })
+
+  return (data ?? []).flatMap((row: any) => {
+    const c = row.cards
+    if (!c) return []
+    return [{
+      savedId: row.id,
+      card_type: row.card_type,
+      saved_at: row.saved_at,
+      card: dbRowToCard(c as DbRow),
+    }]
+  })
 }
