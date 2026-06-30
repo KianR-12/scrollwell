@@ -3,7 +3,13 @@ import { supabase, createProfile } from '../supabase'
 
 type Mode = 'signin' | 'signup'
 
-export function AuthScreen() {
+export const GUEST_USER_ID = '00000000-0000-0000-0000-000000000001'
+
+interface Props {
+  onSkip: () => void
+}
+
+export function AuthScreen({ onSkip }: Props) {
   const [mode, setMode] = useState<Mode>('signin')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -190,6 +196,26 @@ export function AuthScreen() {
                   ? 'Sign In'
                   : 'Create Account'}
             </button>
+
+            <div style={{ textAlign: 'center', paddingTop: 4 }}>
+              <button
+                type="button"
+                onClick={onSkip}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  fontSize: 11,
+                  color: '#bbb',
+                  fontFamily: 'Inter, sans-serif',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 3,
+                }}
+              >
+                Skip for now
+              </button>
+            </div>
           </form>
         )}
       </div>

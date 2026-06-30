@@ -1,12 +1,11 @@
 import { useState, useCallback, Component, type ReactNode } from 'react'
 import { IconHome, IconCompass, IconBookmark, IconUsers, IconUser } from '@tabler/icons-react'
-import type { User } from '@supabase/supabase-js'
 import { HomeTab } from './components/HomeTab'
 import { ExploreTab } from './components/ExploreTab'
 import { DeepDiveTab } from './components/DeepDiveTab'
 import { LibraryTab } from './components/LibraryTab'
 import { ProfileTab } from './components/ProfileTab'
-import { AuthScreen } from './components/AuthScreen'
+import { AuthScreen, GUEST_USER_ID } from './components/AuthScreen'
 import { useCards } from './useCards'
 import { useSavedCards } from './useSavedCards'
 import { useAuth } from './useAuth'
@@ -45,20 +44,22 @@ export default function App() {
 }
 
 function AuthGate() {
-  const { user, loading } = useAuth()
+  const { user, loading, signOut } = useAuth()
+  const [guest, setGuest] = useState(false)
+
   if (loading) return <Splash />
-  if (!user) return <AuthScreen />
-  return <AppShell user={user} />
+  if (guest) return <AppShell userId={GUEST_USER_ID} onSignOut={() => setGuest(false)} />
+  if (!user) return <AuthScreen onSkip={() => setGuest(true)} />
+  return <AppShell userId={user.id} email={user.email} onSignOut={signOut} />
 }
 
-function AppShell({ user }: { user: User }) {
+function AppShell({ userId, email, onSignOut }: { userId: string; email?: string; onSignOut: () => void }) {
   const [tab, setTab] = useState<Tab>('home')
   const [deepDiveCard, setDeepDiveCard] = useState<CardData | null>(null)
   const [history, setHistory] = useState<CardData[]>([])
 
   const { cards, loading } = useCards()
-  const { savedKeys, toggleSave } = useSavedCards(user.id)
-  const { signOut } = useAuth()
+  const { savedKeys, toggleSave } = useSavedCards(userId)
   const activeIndex = TABS.findIndex(t => t.id === tab)
 
   const recordViewed = useCallback((card: CardData) => {
@@ -92,14 +93,14 @@ function AppShell({ user }: { user: User }) {
           />
         )}
         {tab === 'library' && (
-          <LibraryTab userId={user.id} onToggleSave={toggleSave} />
+          <LibraryTab userId={userId} onToggleSave={toggleSave} />
         )}
         {tab === 'profile' && (
           <ProfileTab
             savedCount={savedKeys.size}
             history={history}
-            email={user.email}
-            onSignOut={signOut}
+            email={email}
+            onSignOut={onSignOut}
           />
         )}
         {tab !== 'home' && tab !== 'explore' && tab !== 'library' && tab !== 'profile' && (
