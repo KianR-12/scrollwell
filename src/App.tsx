@@ -1,12 +1,15 @@
 import { useState, useCallback, Component, type ReactNode } from 'react'
 import { IconHome, IconCompass, IconBookmark, IconUsers, IconUser } from '@tabler/icons-react'
+import type { User } from '@supabase/supabase-js'
 import { HomeTab } from './components/HomeTab'
 import { ExploreTab } from './components/ExploreTab'
 import { DeepDiveTab } from './components/DeepDiveTab'
 import { LibraryTab } from './components/LibraryTab'
 import { ProfileTab } from './components/ProfileTab'
+import { AuthScreen } from './components/AuthScreen'
 import { useCards } from './useCards'
 import { useSavedCards } from './useSavedCards'
+import { useAuth } from './useAuth'
 import type { CardData } from './useCards'
 
 type Tab = 'home' | 'explore' | 'library' | 'friends' | 'profile'
@@ -33,12 +36,29 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
   }
 }
 
-function AppShell() {
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AuthGate />
+    </ErrorBoundary>
+  )
+}
+
+function AuthGate() {
+  const { user, loading } = useAuth()
+  if (loading) return <Splash />
+  if (!user) return <AuthScreen />
+  return <AppShell user={user} />
+}
+
+function AppShell({ user }: { user: User }) {
   const [tab, setTab] = useState<Tab>('home')
   const [deepDiveCard, setDeepDiveCard] = useState<CardData | null>(null)
-  const { cards, loading } = useCards()
-  const { savedKeys, toggleSave } = useSavedCards()
   const [history, setHistory] = useState<CardData[]>([])
+
+  const { cards, loading } = useCards()
+  const { savedKeys, toggleSave } = useSavedCards(user.id)
+  const { signOut } = useAuth()
   const activeIndex = TABS.findIndex(t => t.id === tab)
 
   const recordViewed = useCallback((card: CardData) => {
@@ -72,10 +92,15 @@ function AppShell() {
           />
         )}
         {tab === 'library' && (
-          <LibraryTab onToggleSave={toggleSave} />
+          <LibraryTab userId={user.id} onToggleSave={toggleSave} />
         )}
         {tab === 'profile' && (
-          <ProfileTab savedCount={savedKeys.size} history={history} />
+          <ProfileTab
+            savedCount={savedKeys.size}
+            history={history}
+            email={user.email}
+            onSignOut={signOut}
+          />
         )}
         {tab !== 'home' && tab !== 'explore' && tab !== 'library' && tab !== 'profile' && (
           <ComingSoon label={TABS.find(t => t.id === tab)!.label} />
@@ -92,7 +117,6 @@ function AppShell() {
         position: 'relative',
         paddingBottom: 'env(safe-area-inset-bottom, 0)',
       }}>
-        {/* Sliding indicator */}
         <div style={{
           position: 'absolute',
           top: -2,
@@ -139,7 +163,6 @@ function AppShell() {
         })}
       </div>
 
-      {/* Deep Dive overlay */}
       {deepDiveCard && (
         <DeepDiveTab card={deepDiveCard} onBack={() => setDeepDiveCard(null)} />
       )}
@@ -147,11 +170,17 @@ function AppShell() {
   )
 }
 
-export default function App() {
+function Splash() {
   return (
-    <ErrorBoundary>
-      <AppShell />
-    </ErrorBoundary>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#fff' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 200 }}>
+        <div style={{ flex: 1, height: 1.5, background: '#111' }} />
+        <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 18, fontWeight: 700, color: '#111', whiteSpace: 'nowrap' }}>
+          scrollwell
+        </div>
+        <div style={{ flex: 1, height: 1.5, background: '#111' }} />
+      </div>
+    </div>
   )
 }
 

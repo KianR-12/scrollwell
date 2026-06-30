@@ -34,9 +34,11 @@ function persistInterests(set: Set<string>) {
 interface Props {
   savedCount: number
   history: CardData[]
+  email?: string
+  onSignOut: () => void
 }
 
-export function ProfileTab({ savedCount, history }: Props) {
+export function ProfileTab({ savedCount, history, email, onSignOut }: Props) {
   const [interests, setInterests] = useState<Set<string>>(loadInterests)
 
   function toggleInterest(name: string) {
@@ -58,10 +60,42 @@ export function ProfileTab({ savedCount, history }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
 
       {/* Header */}
-      <div style={{ padding: '52px 20px 11px', borderBottom: '2px solid #111', flexShrink: 0 }}>
-        <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: '#111', letterSpacing: '-0.3px' }}>
-          Profile
+      <div style={{
+        padding: '52px 20px 11px',
+        borderBottom: '2px solid #111',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+      }}>
+        <div>
+          <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: '#111', letterSpacing: '-0.3px' }}>
+            Profile
+          </div>
+          {email && (
+            <div style={{ fontSize: 10, color: '#aaa', fontFamily: 'Inter, sans-serif', marginTop: 2 }}>
+              {email}
+            </div>
+          )}
         </div>
+        <button
+          onClick={onSignOut}
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: '0.8px',
+            textTransform: 'uppercase',
+            fontFamily: 'Inter, sans-serif',
+            color: '#aaa',
+            background: 'none',
+            border: '1px solid #E0DCD4',
+            padding: '5px 10px',
+            cursor: 'pointer',
+            marginBottom: 2,
+          }}
+        >
+          Sign Out
+        </button>
       </div>
 
       {/* Scrollable body */}

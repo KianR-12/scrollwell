@@ -5,20 +5,21 @@ import { CardView } from './CardView'
 import type { CardData } from '../useCards'
 
 interface Props {
+  userId: string
   onToggleSave: (card: CardData) => void
 }
 
-export function LibraryTab({ onToggleSave }: Props) {
+export function LibraryTab({ userId, onToggleSave }: Props) {
   const [entries, setEntries] = useState<SavedCard[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<SavedCard | null>(null)
 
   useEffect(() => {
-    fetchLibrary()
+    fetchLibrary(userId)
       .then(setEntries)
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [userId])
 
   function handleUnsave(card: CardData) {
     setEntries(prev =>

@@ -2,15 +2,17 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import type { CardData } from './useCards'
 import { getSavedKeys, saveToLibrary, unsaveFromLibrary } from './supabase'
 
-export function useSavedCards() {
+export function useSavedCards(userId: string | undefined) {
   const [savedKeys, setSavedKeys] = useState<Set<string>>(new Set())
   const pendingRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
-    getSavedKeys().then(setSavedKeys).catch(() => {})
-  }, [])
+    if (!userId) { setSavedKeys(new Set()); return }
+    getSavedKeys(userId).then(setSavedKeys).catch(() => {})
+  }, [userId])
 
   const toggleSave = useCallback(async (card: CardData, type = 'regular') => {
+    if (!userId) return
     const key = `${card.book.title}::${card.book.author}`
     if (pendingRef.current.has(key)) return
     pendingRef.current.add(key)
@@ -23,8 +25,8 @@ export function useSavedCards() {
     })
 
     try {
-      if (saving) await saveToLibrary(card, type)
-      else await unsaveFromLibrary(card)
+      if (saving) await saveToLibrary(card, type, userId)
+      else await unsaveFromLibrary(card, userId)
     } catch {
       setSavedKeys(prev => {
         const next = new Set(prev)
@@ -34,7 +36,7 @@ export function useSavedCards() {
     } finally {
       pendingRef.current.delete(key)
     }
-  }, [savedKeys])
+  }, [savedKeys, userId])
 
   return { savedKeys, toggleSave }
 }
