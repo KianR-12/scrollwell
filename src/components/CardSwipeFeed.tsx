@@ -9,9 +9,10 @@ interface Props {
   onGoDeeper?: (card: CardData) => void
   savedKeys?: Set<string>
   onToggleSave?: (card: CardData) => void
+  onCardViewed?: (card: CardData) => void
 }
 
-export function CardSwipeFeed({ cards, loading, onIndexChange, onGoDeeper, savedKeys, onToggleSave }: Props) {
+export function CardSwipeFeed({ cards, loading, onIndexChange, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: Props) {
   const [index, setIndex] = useState(0)
   const [saved, setSaved] = useState<Set<number>>(new Set())
   const [dragOffset, setDragOffset] = useState(0)
@@ -19,6 +20,8 @@ export function CardSwipeFeed({ cards, loading, onIndexChange, onGoDeeper, saved
   const touchStartY = useRef(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const savedInitialized = useRef(false)
+  const onCardViewedRef = useRef(onCardViewed)
+  useEffect(() => { onCardViewedRef.current = onCardViewed })
 
   const firstKey = cards.length > 0 ? `${cards[0].book.title}::${cards[0].book.author}` : '__empty__'
 
@@ -29,6 +32,12 @@ export function CardSwipeFeed({ cards, loading, onIndexChange, onGoDeeper, saved
     savedInitialized.current = false
     onIndexChange?.(0)
   }, [firstKey])
+
+  // Fire onCardViewed whenever the visible card changes
+  useEffect(() => {
+    if (cards.length === 0 || loading) return
+    onCardViewedRef.current?.(cards[index])
+  }, [index, firstKey, loading])
 
   // Initialize saved state once when savedKeys first arrives (or cards first load)
   useEffect(() => {

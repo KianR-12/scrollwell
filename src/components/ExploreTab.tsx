@@ -31,9 +31,10 @@ interface ExploreProps {
   onGoDeeper?: (card: CardData) => void
   savedKeys?: Set<string>
   onToggleSave?: (card: CardData) => void
+  onCardViewed?: (card: CardData) => void
 }
 
-export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave }: ExploreProps) {
+export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }: ExploreProps) {
   const [active, setActive] = useState<Category | null>(null)
   const [cards, setCards] = useState<CardData[]>([])
   const [initialLoading, setInitialLoading] = useState(false)
@@ -115,6 +116,7 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave }: ExploreProps
         onCardIndexChange={onCardIndexChange}
         savedKeys={savedKeys}
         onToggleSave={onToggleSave}
+        onCardViewed={onCardViewed}
       />
     )
   }
@@ -177,9 +179,10 @@ interface FeedProps {
   onCardIndexChange: (i: number) => void
   savedKeys?: Set<string>
   onToggleSave?: (card: CardData) => void
+  onCardViewed?: (card: CardData) => void
 }
 
-function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error, onBack, onGoDeeper, onCardIndexChange, savedKeys, onToggleSave }: FeedProps) {
+function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error, onBack, onGoDeeper, onCardIndexChange, savedKeys, onToggleSave, onCardViewed }: FeedProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       {/* Header */}
@@ -246,6 +249,7 @@ function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error
           onIndexChange={onCardIndexChange}
           savedKeys={savedKeys}
           onToggleSave={onToggleSave}
+          onCardViewed={onCardViewed}
         />
       )}
     </div>

@@ -1,9 +1,10 @@
-import { useState, Component, type ReactNode } from 'react'
+import { useState, useCallback, Component, type ReactNode } from 'react'
 import { IconHome, IconCompass, IconBookmark, IconUsers, IconUser } from '@tabler/icons-react'
 import { HomeTab } from './components/HomeTab'
 import { ExploreTab } from './components/ExploreTab'
 import { DeepDiveTab } from './components/DeepDiveTab'
 import { LibraryTab } from './components/LibraryTab'
+import { ProfileTab } from './components/ProfileTab'
 import { useCards } from './useCards'
 import { useSavedCards } from './useSavedCards'
 import type { CardData } from './useCards'
@@ -37,7 +38,16 @@ function AppShell() {
   const [deepDiveCard, setDeepDiveCard] = useState<CardData | null>(null)
   const { cards, loading } = useCards()
   const { savedKeys, toggleSave } = useSavedCards()
+  const [history, setHistory] = useState<CardData[]>([])
   const activeIndex = TABS.findIndex(t => t.id === tab)
+
+  const recordViewed = useCallback((card: CardData) => {
+    setHistory(prev => {
+      const key = `${card.book.title}::${card.book.author}`
+      const filtered = prev.filter(c => `${c.book.title}::${c.book.author}` !== key)
+      return [card, ...filtered].slice(0, 10)
+    })
+  }, [])
 
   return (
     <>
@@ -50,6 +60,7 @@ function AppShell() {
             onGoDeeper={setDeepDiveCard}
             savedKeys={savedKeys}
             onToggleSave={toggleSave}
+            onCardViewed={recordViewed}
           />
         )}
         {tab === 'explore' && (
@@ -57,14 +68,16 @@ function AppShell() {
             onGoDeeper={setDeepDiveCard}
             savedKeys={savedKeys}
             onToggleSave={toggleSave}
+            onCardViewed={recordViewed}
           />
         )}
         {tab === 'library' && (
-          <LibraryTab
-            onToggleSave={toggleSave}
-          />
+          <LibraryTab onToggleSave={toggleSave} />
         )}
-        {tab !== 'home' && tab !== 'explore' && tab !== 'library' && (
+        {tab === 'profile' && (
+          <ProfileTab savedCount={savedKeys.size} history={history} />
+        )}
+        {tab !== 'home' && tab !== 'explore' && tab !== 'library' && tab !== 'profile' && (
           <ComingSoon label={TABS.find(t => t.id === tab)!.label} />
         )}
       </div>
