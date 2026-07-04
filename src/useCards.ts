@@ -15,7 +15,7 @@ export interface CardData {
 
 const SYSTEM_PROMPT = `You generate short cards for a mobile reading app. Each card surfaces one sharp, surprising insight from a book — written like something worth dropping at dinner.
 
-For each book, use web_search to find something specific happening in 2026 that connects to it — a policy, study, ruling, or cultural moment. Then generate the card.
+For each book, draw on your knowledge of events, policies, research, and cultural trends in 2026 to find a specific connection for the relevance field. Then generate the card.
 
 For each book return exactly this JSON shape (no markdown, no explanation, just the array):
 [
@@ -35,7 +35,7 @@ Rules:
 - gist has no bullet points, no headers, no em-dashes
 - howToTalk is one casual sentence, reads like a text from a friend — specific, never instructional
 - socialCount is a plausible integer between 900 and 4800
-- relevance names a specific 2026 event or development from web search — never vague
+- relevance names a specific 2026 event or development — never vague
 - No emojis anywhere
 - Return only valid JSON — nothing before or after the array`
 
@@ -109,11 +109,9 @@ export function useCards() {
         const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true })
         const bookList = BOOKS.map((b, i) => `${i + 1}. "${b.title}" by ${b.author} (${b.year}, ${b.pages} pages)`).join('\n')
 
-        const resp = await client.beta.messages.create({
+        const resp = await client.messages.create({
           model: 'claude-sonnet-4-6',
           max_tokens: 2048,
-          tools: [{ type: 'web_search_20260318' as any, name: 'web_search' }],
-          betas: ['web-search-2026-03-18' as any],
           system: SYSTEM_PROMPT,
           messages: [{ role: 'user', content: `Generate cards for these 6 books:\n${bookList}` }],
         })

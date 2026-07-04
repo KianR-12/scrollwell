@@ -32,7 +32,7 @@ export function hasApiKey(): boolean {
 
 const CATEGORY_PROMPT = `You generate cards for a mobile reading app. Each card surfaces one sharp, surprising insight from a book — written like something worth dropping at dinner.
 
-For the requested category, pick the most interesting books. For each book, use web_search to find something specific happening in 2026 that connects to it — a policy, study, ruling, or cultural moment. Then generate a card for each.
+For the requested category, pick the most interesting books. For each book, draw on your knowledge of events, policies, research, and cultural trends in 2026 to find a specific connection for the relevance field. Then generate a card for each.
 
 Return a JSON array with exactly the requested number of objects:
 [
@@ -62,13 +62,13 @@ Rules:
 - socialCount is a realistic integer between 900 and 4800
 - isbn must be a real valid ISBN-13 for a real published book (it will be used to load a cover image)
 - book.category must exactly match the requested category name
-- relevance names a specific 2026 event or development from web search — never vague
+- relevance names a specific 2026 event or development — never vague
 - No emojis anywhere
 - Return only valid JSON — nothing before or after the array`
 
 const DEEP_DIVE_PROMPT = `You break books, articles, and talks into their most important parts for a mobile reading app called scrollwell.
 
-Before writing any sections, use web_search to find something specific happening in 2026 that connects to this work — a policy, study, court ruling, cultural moment, or ongoing debate. You'll use this for the relevance field.
+Before writing any sections, draw on your knowledge of events, policies, research, and cultural trends in 2026 to identify something specific that connects to this work. You'll use this for the relevance field.
 
 Read the work and decide how many cards it actually needs to cover it properly. Cover everything that matters, skip nothing important, and don't pad with filler cards just to hit a number. The count should come from the content, not a rule.
 
@@ -93,13 +93,13 @@ Rules:
 - hook is always wrapped in double-quote characters as part of the string value
 - howToTalk must start with the exact words 'Bring this up when'
 - gist has no bullet points, no em-dashes, no headers
-- relevance names a specific 2026 event or development from web search — never vague
+- relevance names a specific 2026 event or development — never vague
 - No emojis anywhere
 - Return only valid JSON`
 
 const WORKS_PROMPT = `You generate cards for a mobile reading app. For each specific work listed, write one card surfacing its single sharpest, most surprising insight — written like something worth dropping at dinner.
 
-For each work, use web_search to find something specific happening in 2026 that makes it timely — a policy, study, ruling, trend, or cultural moment. Then write the card.
+For each work, draw on your knowledge of events, policies, research, and cultural trends in 2026 to find a specific connection for the relevance field. Then write the card.
 
 Return a JSON array with exactly one object per work, in the same order they were listed:
 [
@@ -130,7 +130,7 @@ Rules:
 - socialCount is a realistic integer between 900 and 4800
 - isbn must be a real valid ISBN-13 for this specific work (used to load a cover image); for talks or articles use "0000000000000"
 - book.category must exactly match the provided category name
-- relevance names a specific 2026 event or development from web search — never vague
+- relevance names a specific 2026 event or development — never vague
 - No emojis anywhere
 - Return only valid JSON — nothing before or after the array`
 
@@ -138,7 +138,7 @@ const SEARCH_CARD_PROMPT = `You generate a single card for a mobile reading app 
 
 The user has searched for something — it might be a book title, an author, a TED talk, a podcast, an article, or a vague idea. Figure out the single best work to surface for their query and generate one card for it.
 
-Before writing the card, use web_search to find what's actually happening right now in 2026 that connects to this work. Search for a recent news story, policy debate, study, court ruling, cultural moment, or trend. Be specific — you'll use this to write the relevance field.
+Before writing the card, draw on your knowledge of events, policies, research, and cultural trends in 2026 to find a specific connection for the relevance field.
 
 Return a single JSON object (not an array):
 {
@@ -147,7 +147,7 @@ Return a single JSON object (not an array):
   "gist": "3–4 plain sentences backing the hook up. Concrete, no fluff. Write for someone smart who hasn't read the work.",
   "howToTalk": "One sentence. Write it exactly like you'd text a friend right before dinner — 'next time [X] comes up just mention [Y]'. Has to be casual, specific, and feel like insider knowledge between friends. Never starts with 'Inform', 'Share', 'Tell', or 'Explain'.",
   "socialCount": 1234,
-  "relevance": "One sentence naming the specific event, study, ruling, or debate happening in 2026 that makes this work timely. Found via web search. Never vague — name the actual thing, not 'this topic is more relevant than ever'.",
+  "relevance": "One sentence naming the specific event, study, ruling, or debate happening in 2026 that makes this work timely. Never vague — name the actual thing, not 'this topic is more relevant than ever'.",
   "book": {
     "title": "Exact title of the work",
     "author": "First Last",
@@ -165,7 +165,7 @@ Rules:
 - howToTalk is one sentence, casual, reads like a text from a friend
 - socialCount is a realistic integer between 900 and 4800
 - isbn must be a real valid ISBN-13 for this specific published work; for TED talks, podcasts, or articles use "0000000000000"
-- relevance must name a specific real 2026 event or development from your web search
+- relevance must name a specific real 2026 event or development — never vague
 - No emojis anywhere
 - Return only valid JSON — nothing before or after`
 
@@ -190,10 +190,7 @@ export function clearCardCaches() {
   deepDiveCache.clear()
 }
 
-const WEB_SEARCH_TOOL: any[] = [{ type: 'web_search_20260318', name: 'web_search' }]
-const WEB_SEARCH_BETA: any[] = ['web-search-2026-03-18']
-
-function extractBetaText(content: any[]): string {
+function extractText(content: any[]): string {
   return content
     .filter((b: any) => b.type === 'text')
     .map((b: any) => b.text as string)
@@ -253,11 +250,9 @@ export async function generateDeepDive(card: CardData): Promise<DeepDiveData> {
 
   // Tier 3: Anthropic API
   const client = getClient()
-  const resp = await client.beta.messages.create({
+  const msg = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
-    tools: WEB_SEARCH_TOOL,
-    betas: WEB_SEARCH_BETA,
     system: DEEP_DIVE_PROMPT,
     messages: [{
       role: 'user',
@@ -265,7 +260,7 @@ export async function generateDeepDive(card: CardData): Promise<DeepDiveData> {
     }],
   })
 
-  const result = JSON.parse(extractBetaText(resp.content as any[])) as DeepDiveData
+  const result = JSON.parse(extractText(msg.content as any[])) as DeepDiveData
   deepDiveCache.set(cacheKey, result)
   saveDeepDiveToDb(title, author, result).catch(() => {})
   return result
@@ -276,11 +271,9 @@ export async function generateCards(categoryName: string, count = 3): Promise<Ca
   if (cached) return cached
 
   const client = getClient()
-  const resp = await client.beta.messages.create({
+  const msg = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
-    tools: WEB_SEARCH_TOOL,
-    betas: WEB_SEARCH_BETA,
     system: CATEGORY_PROMPT,
     messages: [{
       role: 'user',
@@ -288,7 +281,7 @@ export async function generateCards(categoryName: string, count = 3): Promise<Ca
     }],
   })
 
-  const parsed = JSON.parse(extractBetaText(resp.content as any[])) as Array<{
+  const parsed = JSON.parse(extractText(msg.content as any[])) as Array<{
     hook: string; hookSub: string; gist: string; howToTalk: string
     socialCount: number; relevance: string
     book: { title: string; author: string; year: number; pages: number; isbn: string; category: string }
@@ -347,11 +340,9 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
     .map((w, i) => `${i + 1}. "${w.title}" by ${w.author} (${w.type}, ${w.year})`)
     .join('\n')
 
-  const resp = await client.beta.messages.create({
+  const resp = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
-    tools: WEB_SEARCH_TOOL,
-    betas: WEB_SEARCH_BETA,
     system: WORKS_PROMPT,
     messages: [{
       role: 'user',
@@ -359,7 +350,7 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
     }],
   })
 
-  const parsed = JSON.parse(extractBetaText(resp.content as any[])) as Array<{
+  const parsed = JSON.parse(extractText(resp.content as any[])) as Array<{
     hook: string; hookSub: string; gist: string; howToTalk: string; socialCount: number; relevance: string
     book: { title: string; author: string; year: number; pages: number; isbn: string; category: string }
   }>
@@ -383,20 +374,14 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
 export async function generateCard(query: string): Promise<CardData> {
   const client = getClient()
 
-  const resp = await client.beta.messages.create({
+  const resp = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
-    tools: [{ type: 'web_search_20260318', name: 'web_search' }],
-    betas: ['web-search-2026-03-18'],
     system: SEARCH_CARD_PROMPT,
     messages: [{ role: 'user', content: `Search query: "${query}"` }],
   })
 
-  const text = (resp.content as any[])
-    .filter((b: any) => b.type === 'text')
-    .map((b: any) => b.text as string)
-    .join('')
-    .replace(/```json/g, '').replace(/```/g, '').trim()
+  const text = extractText(resp.content as any[])
 
   const c = JSON.parse(text) as {
     hook: string; hookSub: string; gist: string; howToTalk: string
