@@ -9,6 +9,8 @@ export interface CardData {
   hookSub: string
   gist: string
   socialCount: number
+  howToTalk?: string
+  relevance?: string
 }
 
 const SYSTEM_PROMPT = `You generate short cards for a mobile reading app. Each card surfaces one sharp, surprising insight from a book — written like something worth dropping at dinner.

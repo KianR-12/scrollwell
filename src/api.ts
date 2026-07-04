@@ -75,7 +75,7 @@ Return a JSON object — no markdown, no explanation:
       "title": "2–4 word label for this chapter or idea, in title case",
       "hook": "A punchy, counterintuitive statement in double quotes — the core insight of this part.",
       "gist": "3–4 sentences explaining this idea directly and completely. Concrete, no fluff. Write for someone who hasn't read the work.",
-      "howToTalk": "1–2 sentences that start exactly with 'Bring this up when' — a natural way to use this insight in conversation."
+      "howToTalk": "One sentence starting with 'Bring this up when'. Write it the way you'd text a friend — casual, specific, never instructional. Like 'Bring this up when someone says X — just point out Y'. Insider knowledge, not a lesson."
     }
   ]
 }
@@ -123,12 +123,16 @@ const SEARCH_CARD_PROMPT = `You generate a single card for a mobile reading app 
 
 The user has searched for something — it might be a book title, an author, a TED talk, a podcast, an article, or a vague idea. Figure out the single best work to surface for their query and generate one card for it.
 
+Before writing the card, use web_search to find what's actually happening right now in 2026 that connects to this work. Search for a recent news story, policy debate, study, court ruling, cultural moment, or trend. Be specific — you'll use this to write the relevance field.
+
 Return a single JSON object (not an array):
 {
   "hook": "A single punchy, counterintuitive sentence in double quotes. A provocation, not a summary.",
   "hookSub": "A 6–10 word lowercase subtitle naming what the hook is really about.",
   "gist": "3–4 plain sentences backing the hook up. Concrete, no fluff. Write for someone smart who hasn't read the work.",
+  "howToTalk": "One sentence. Write it exactly like you'd text a friend right before dinner — 'next time [X] comes up just mention [Y]'. Has to be casual, specific, and feel like insider knowledge between friends. Never starts with 'Inform', 'Share', 'Tell', or 'Explain'.",
   "socialCount": 1234,
+  "relevance": "One sentence naming the specific event, study, ruling, or debate happening in 2026 that makes this work timely. Found via web search. Never vague — name the actual thing, not 'this topic is more relevant than ever'.",
   "book": {
     "title": "Exact title of the work",
     "author": "First Last",
@@ -143,8 +147,10 @@ Rules:
 - hook is always wrapped in double-quote characters as part of the string value
 - hookSub is lowercase, no period at the end
 - gist has no bullet points, no headers, no em-dashes
+- howToTalk is one sentence, casual, reads like a text from a friend
 - socialCount is a realistic integer between 900 and 4800
 - isbn must be a real valid ISBN-13 for this specific published work; for TED talks, podcasts, or articles use "0000000000000"
+- relevance must name a specific real 2026 event or development from your web search
 - No emojis anywhere
 - Return only valid JSON — nothing before or after`
 
@@ -329,18 +335,30 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
 
 export async function generateCard(query: string): Promise<CardData> {
   const client = getClient()
-  const msg = await client.messages.create({
+
+  const resp = await client.beta.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
+    max_tokens: 2048,
+    tools: [{ type: 'web_search_20260318', name: 'web_search' }],
+    betas: ['web-search-2026-03-18'],
     system: SEARCH_CARD_PROMPT,
     messages: [{ role: 'user', content: `Search query: "${query}"` }],
   })
 
-  const text = (msg.content[0].type === 'text' ? msg.content[0].text : '')
+  const text = (resp.content as any[])
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text as string)
+    .join('')
     .replace(/```json/g, '').replace(/```/g, '').trim()
+
   const c = JSON.parse(text) as {
-    hook: string; hookSub: string; gist: string; socialCount: number
+    hook: string; hookSub: string; gist: string; howToTalk: string
+    socialCount: number; relevance: string
     book: { title: string; author: string; year: number; pages: number; isbn: string; category: string }
   }
-  return { hook: c.hook, hookSub: c.hookSub, gist: c.gist, socialCount: c.socialCount, book: c.book }
+  return {
+    hook: c.hook, hookSub: c.hookSub, gist: c.gist,
+    socialCount: c.socialCount, book: c.book,
+    howToTalk: c.howToTalk, relevance: c.relevance,
+  }
 }
