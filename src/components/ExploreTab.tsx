@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
-import { IconArrowLeft } from '@tabler/icons-react'
+import { IconArrowLeft, IconSearch, IconX } from '@tabler/icons-react'
 import { CardSwipeFeed } from './CardSwipeFeed'
-import { generateCardsForWorks } from '../api'
+import { generateCardsForWorks, generateCard } from '../api'
 import { CONTENT_LIBRARY, type Work } from '../contentLibrary'
 import type { CardData } from '../useCards'
 
@@ -34,8 +34,13 @@ interface ExploreProps {
   onCardViewed?: (card: CardData) => void
 }
 
+type ExploreView =
+  | { kind: 'grid' }
+  | { kind: 'category'; cat: Category }
+  | { kind: 'search'; query: string; card: CardData | null; loading: boolean; error: string | null }
+
 export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }: ExploreProps) {
-  const [active, setActive] = useState<Category | null>(null)
+  const [view, setView] = useState<ExploreView>({ kind: 'grid' })
   const [cards, setCards] = useState<CardData[]>([])
   const [initialLoading, setInitialLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -46,7 +51,7 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
   const isLoadingMore = useRef(false)
 
   async function openCategory(cat: Category) {
-    setActive(cat)
+    setView({ kind: 'category', cat })
     setError(null)
     setCards([])
     setInitialLoading(true)
@@ -67,21 +72,36 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
     }
   }
 
+  async function handleSearch(query: string) {
+    const q = query.trim()
+    if (!q) return
+    setView({ kind: 'search', query: q, card: null, loading: true, error: null })
+    try {
+      const card = await generateCard(q)
+      setView({ kind: 'search', query: q, card, loading: false, error: null })
+    } catch (err) {
+      setView({
+        kind: 'search', query: q, card: null, loading: false,
+        error: err instanceof Error ? err.message : 'Something went wrong',
+      })
+    }
+  }
+
   async function loadMore() {
-    if (isLoadingMore.current) return
+    if (isLoadingMore.current || view.kind !== 'category') return
     const works = worksRef.current
     const start = nextBatchRef.current
-    if (start >= works.length || !active) return
+    if (start >= works.length) return
 
     isLoadingMore.current = true
     setLoadingMore(true)
     try {
       const batch = works.slice(start, start + BATCH)
-      const newCards = await generateCardsForWorks(batch, active.title)
+      const newCards = await generateCardsForWorks(batch, view.kind === 'category' ? view.cat.title : '')
       setCards(prev => [...prev, ...newCards])
       nextBatchRef.current = start + batch.length
     } catch {
-      // silent — user keeps the cards already loaded
+      // silent
     } finally {
       setLoadingMore(false)
       isLoadingMore.current = false
@@ -91,21 +111,35 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
   function onCardIndexChange(i: number) {
     const loaded = cards.length
     const total = worksRef.current.length
-    if (i >= loaded - 2 && nextBatchRef.current < total) {
-      loadMore()
-    }
+    if (i >= loaded - 2 && nextBatchRef.current < total) loadMore()
   }
 
   function goBack() {
-    setActive(null)
+    setView({ kind: 'grid' })
     setCards([])
     setError(null)
   }
 
-  if (active) {
+  if (view.kind === 'search') {
+    return (
+      <SearchResultView
+        query={view.query}
+        card={view.card}
+        loading={view.loading}
+        error={view.error}
+        onBack={goBack}
+        onGoDeeper={onGoDeeper}
+        savedKeys={savedKeys}
+        onToggleSave={onToggleSave}
+        onCardViewed={onCardViewed}
+      />
+    )
+  }
+
+  if (view.kind === 'category') {
     return (
       <CategoryFeed
-        category={active}
+        category={view.cat}
         cards={cards}
         loading={initialLoading}
         loadingMore={loadingMore}
@@ -121,20 +155,212 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
     )
   }
 
-  return <CategoryGrid onSelect={openCategory} />
+  return <CategoryGrid onSelect={openCategory} onSearch={handleSearch} />
+}
+
+// ── Search result view ─────────────────────────────────────────────────────────
+
+interface SearchResultProps {
+  query: string
+  card: CardData | null
+  loading: boolean
+  error: string | null
+  onBack: () => void
+  onGoDeeper?: (card: CardData) => void
+  savedKeys?: Set<string>
+  onToggleSave?: (card: CardData) => void
+  onCardViewed?: (card: CardData) => void
+}
+
+function SearchResultView({ query, card, loading, error, onBack, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: SearchResultProps) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+      {/* Header */}
+      <div style={{
+        padding: '52px 20px 11px',
+        borderBottom: '2px solid #111',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'flex-end',
+        gap: 12,
+      }}>
+        <button
+          onClick={onBack}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#111', display: 'flex', alignItems: 'center', flexShrink: 0, marginBottom: 2 }}
+        >
+          <IconArrowLeft size={18} stroke={1.8} />
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: '1px',
+            textTransform: 'uppercase',
+            color: '#bbb',
+            fontFamily: 'Inter, sans-serif',
+            marginBottom: 3,
+          }}>
+            Search
+          </div>
+          <div style={{
+            fontFamily: '"Playfair Display", serif',
+            fontSize: 18,
+            fontWeight: 700,
+            color: '#111',
+            letterSpacing: '-0.3px',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {query}
+          </div>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ height: 2, background: '#EBEBEB', flexShrink: 0 }}>
+        <div style={{
+          height: '100%',
+          background: '#111',
+          width: loading ? '60%' : '100%',
+          transition: 'width 1.2s ease',
+          opacity: loading ? 1 : 0,
+        }} />
+      </div>
+
+      {error && (
+        <div style={{ padding: '28px 20px', flexShrink: 0 }}>
+          <div style={{ fontSize: 13, color: '#888', lineHeight: 1.6, fontFamily: 'Inter, sans-serif', marginBottom: 16 }}>
+            {error}
+          </div>
+          <button
+            onClick={onBack}
+            style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: '#111', background: 'none', border: '1px solid #111', padding: '8px 14px', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
+          >
+            Go back
+          </button>
+        </div>
+      )}
+
+      {!error && (
+        <CardSwipeFeed
+          cards={card ? [card] : []}
+          loading={loading}
+          onGoDeeper={onGoDeeper}
+          savedKeys={savedKeys}
+          onToggleSave={onToggleSave}
+          onCardViewed={onCardViewed}
+        />
+      )}
+    </div>
+  )
 }
 
 // ── Grid view ──────────────────────────────────────────────────────────────────
 
-function CategoryGrid({ onSelect }: { onSelect: (cat: Category) => void }) {
+function CategoryGrid({ onSelect, onSearch }: { onSelect: (cat: Category) => void; onSearch: (q: string) => void }) {
+  const [query, setQuery] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  function submit() {
+    const q = query.trim()
+    if (!q) return
+    onSearch(q)
+  }
+
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') submit()
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+
+      {/* Title header */}
       <div style={{ padding: '52px 20px 11px', borderBottom: '2px solid #111', flexShrink: 0 }}>
-        <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: '#111', letterSpacing: '-0.3px' }}>
+        <div style={{
+          fontFamily: '"Playfair Display", serif',
+          fontSize: 22,
+          fontWeight: 700,
+          color: '#111',
+          letterSpacing: '-0.3px',
+        }}>
           Explore
         </div>
       </div>
 
+      {/* Search bar */}
+      <div style={{
+        padding: '12px 20px',
+        borderBottom: '1px solid #E8E4DC',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+      }}>
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          border: '1.5px solid #D0CCC4',
+          borderRadius: 3,
+          padding: '9px 12px',
+          background: '#FAFAF8',
+        }}>
+          <IconSearch size={15} stroke={1.8} color="#bbb" style={{ flexShrink: 0 }} />
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Any book, talk, idea, or person…"
+            style={{
+              flex: 1,
+              border: 'none',
+              background: 'none',
+              outline: 'none',
+              fontSize: 13,
+              fontFamily: 'Inter, sans-serif',
+              color: '#111',
+              minWidth: 0,
+            }}
+          />
+          {query.length > 0 && (
+            <button
+              onClick={() => { setQuery(''); inputRef.current?.focus() }}
+              style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#bbb', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+            >
+              <IconX size={14} stroke={2} />
+            </button>
+          )}
+        </div>
+
+        <button
+          onClick={submit}
+          disabled={!query.trim()}
+          style={{
+            padding: '9px 14px',
+            background: query.trim() ? '#111' : '#E8E4DC',
+            color: query.trim() ? '#fff' : '#bbb',
+            border: 'none',
+            borderRadius: 3,
+            fontFamily: 'Inter, sans-serif',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.8px',
+            textTransform: 'uppercase',
+            cursor: query.trim() ? 'pointer' : 'default',
+            transition: 'background 0.15s, color 0.15s',
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Search
+        </button>
+      </div>
+
+      {/* Category grid */}
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '12px 20px 20px' }}>
           {CATEGORIES.map(cat => (

@@ -48,19 +48,32 @@ function AuthGate() {
   const [guest, setGuest] = useState(false)
 
   if (loading) return <Splash />
-  if (guest) return <AppShell userId={GUEST_USER_ID} onSignOut={() => setGuest(false)} />
+  if (guest) return <AppShell userId={GUEST_USER_ID} isGuest onSignOut={() => setGuest(false)} />
   if (!user) return <AuthScreen onSkip={() => setGuest(true)} />
   return <AppShell userId={user.id} email={user.email} onSignOut={signOut} />
 }
 
-function AppShell({ userId, email, onSignOut }: { userId: string; email?: string; onSignOut: () => void }) {
+function AppShell({ userId, email, isGuest = false, onSignOut }: { userId: string; email?: string; isGuest?: boolean; onSignOut: () => void }) {
   const [tab, setTab] = useState<Tab>('home')
   const [deepDiveCard, setDeepDiveCard] = useState<CardData | null>(null)
   const [history, setHistory] = useState<CardData[]>([])
+  const [showGuestGate, setShowGuestGate] = useState(false)
 
   const { cards, loading } = useCards()
-  const { savedKeys, toggleSave } = useSavedCards(userId)
+  const { savedKeys, toggleSave: _toggleSave } = useSavedCards(userId)
   const activeIndex = TABS.findIndex(t => t.id === tab)
+
+  // For guests: block save and show the gate instead of actually saving
+  const toggleSave = useCallback((card: CardData, type?: string) => {
+    if (isGuest) { setShowGuestGate(true); return }
+    _toggleSave(card, type)
+  }, [isGuest, _toggleSave])
+
+  // For guests: block Library tab
+  function handleTabPress(id: Tab) {
+    if (isGuest && id === 'library') { setShowGuestGate(true); return }
+    setTab(id)
+  }
 
   const recordViewed = useCallback((card: CardData) => {
     setHistory(prev => {
@@ -133,7 +146,7 @@ function AppShell({ userId, email, onSignOut }: { userId: string; email?: string
           return (
             <button
               key={id}
-              onClick={() => setTab(id)}
+              onClick={() => handleTabPress(id)}
               style={{
                 flex: 1,
                 display: 'flex',
@@ -167,6 +180,13 @@ function AppShell({ userId, email, onSignOut }: { userId: string; email?: string
       {deepDiveCard && (
         <DeepDiveTab card={deepDiveCard} onBack={() => setDeepDiveCard(null)} />
       )}
+
+      {showGuestGate && (
+        <GuestGateModal
+          onDismiss={() => setShowGuestGate(false)}
+          onSignUp={() => { setShowGuestGate(false); onSignOut() }}
+        />
+      )}
     </>
   )
 }
@@ -199,5 +219,115 @@ function ComingSoon({ label }: { label: string }) {
         </span>
       </div>
     </div>
+  )
+}
+
+// ── Guest gate modal ───────────────────────────────────────────────────────────
+
+function GuestGateModal({ onDismiss, onSignUp }: { onDismiss: () => void; onSignUp: () => void }) {
+  return (
+    <>
+      {/* Scrim */}
+      <div
+        onClick={onDismiss}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,0.32)',
+          zIndex: 100,
+        }}
+      />
+
+      {/* Sheet */}
+      <div style={{
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 101,
+        background: '#fff',
+        padding: '32px 28px calc(32px + env(safe-area-inset-bottom, 0px))',
+        borderTop: '2px solid #111',
+      }}>
+        {/* Wordmark */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+          <div style={{ flex: 1, height: 1.5, background: '#111' }} />
+          <div style={{
+            fontFamily: '"Playfair Display", serif',
+            fontSize: 18,
+            fontWeight: 700,
+            color: '#111',
+            whiteSpace: 'nowrap',
+          }}>
+            scrollwell
+          </div>
+          <div style={{ flex: 1, height: 1.5, background: '#111' }} />
+        </div>
+
+        {/* Heading */}
+        <div style={{
+          fontFamily: '"Playfair Display", serif',
+          fontSize: 20,
+          fontWeight: 700,
+          color: '#111',
+          marginBottom: 8,
+          lineHeight: 1.25,
+        }}>
+          Create an account to save this.
+        </div>
+
+        {/* Body */}
+        <div style={{
+          fontSize: 13,
+          color: '#888',
+          fontFamily: 'Inter, sans-serif',
+          lineHeight: 1.6,
+          marginBottom: 28,
+        }}>
+          Your library, reading history, and saved cards are all free — just takes a moment to set up.
+        </div>
+
+        {/* Sign up CTA */}
+        <button
+          onClick={onSignUp}
+          style={{
+            width: '100%',
+            padding: '14px 0',
+            background: '#111',
+            color: '#fff',
+            border: 'none',
+            fontFamily: 'Inter, sans-serif',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '1.2px',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            marginBottom: 14,
+          }}
+        >
+          Create Free Account
+        </button>
+
+        {/* Dismiss */}
+        <button
+          onClick={onDismiss}
+          style={{
+            width: '100%',
+            padding: '13px 0',
+            background: 'none',
+            color: '#111',
+            border: '1.5px solid #D0CCC4',
+            fontFamily: 'Inter, sans-serif',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '1.2px',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+          }}
+        >
+          Keep Browsing
+        </button>
+      </div>
+    </>
   )
 }

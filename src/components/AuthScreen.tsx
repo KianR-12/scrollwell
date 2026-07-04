@@ -197,25 +197,26 @@ export function AuthScreen({ onSkip }: Props) {
                   : 'Create Account'}
             </button>
 
-            <div style={{ textAlign: 'center', paddingTop: 4 }}>
-              <button
-                type="button"
-                onClick={onSkip}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  fontSize: 11,
-                  color: '#bbb',
-                  fontFamily: 'Inter, sans-serif',
-                  cursor: 'pointer',
-                  textDecoration: 'underline',
-                  textUnderlineOffset: 3,
-                }}
-              >
-                Skip for now
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={onSkip}
+              style={{
+                marginTop: 4,
+                padding: '13px 0',
+                background: 'none',
+                color: '#111',
+                border: '1.5px solid #D0CCC4',
+                fontFamily: 'Inter, sans-serif',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '1.2px',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                transition: 'border-color 0.15s',
+              }}
+            >
+              Continue without account
+            </button>
           </form>
         )}
       </div>

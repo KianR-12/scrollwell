@@ -119,6 +119,35 @@ Rules:
 - No emojis anywhere
 - Return only valid JSON — nothing before or after the array`
 
+const SEARCH_CARD_PROMPT = `You generate a single card for a mobile reading app called scrollwell.
+
+The user has searched for something — it might be a book title, an author, a TED talk, a podcast, an article, or a vague idea. Figure out the single best work to surface for their query and generate one card for it.
+
+Return a single JSON object (not an array):
+{
+  "hook": "A single punchy, counterintuitive sentence in double quotes. A provocation, not a summary.",
+  "hookSub": "A 6–10 word lowercase subtitle naming what the hook is really about.",
+  "gist": "3–4 plain sentences backing the hook up. Concrete, no fluff. Write for someone smart who hasn't read the work.",
+  "socialCount": 1234,
+  "book": {
+    "title": "Exact title of the work",
+    "author": "First Last",
+    "year": 2020,
+    "pages": 300,
+    "isbn": "9781234567890",
+    "category": "the most fitting category"
+  }
+}
+
+Rules:
+- hook is always wrapped in double-quote characters as part of the string value
+- hookSub is lowercase, no period at the end
+- gist has no bullet points, no headers, no em-dashes
+- socialCount is a realistic integer between 900 and 4800
+- isbn must be a real valid ISBN-13 for this specific published work; for TED talks, podcasts, or articles use "0000000000000"
+- No emojis anywhere
+- Return only valid JSON — nothing before or after`
+
 const deepDiveCache = new Map<string, DeepDiveData>()
 const categoryCache = new Map<string, CardData[]>()
 const workCardCache = new Map<string, CardData>()
@@ -296,4 +325,22 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
   })
 
   return result.filter((c): c is CardData => !!c)
+}
+
+export async function generateCard(query: string): Promise<CardData> {
+  const client = getClient()
+  const msg = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    system: SEARCH_CARD_PROMPT,
+    messages: [{ role: 'user', content: `Search query: "${query}"` }],
+  })
+
+  const text = (msg.content[0].type === 'text' ? msg.content[0].text : '')
+    .replace(/```json/g, '').replace(/```/g, '').trim()
+  const c = JSON.parse(text) as {
+    hook: string; hookSub: string; gist: string; socialCount: number
+    book: { title: string; author: string; year: number; pages: number; isbn: string; category: string }
+  }
+  return { hook: c.hook, hookSub: c.hookSub, gist: c.gist, socialCount: c.socialCount, book: c.book }
 }
