@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { IconArrowLeft, IconSearch, IconX, IconRefresh } from '@tabler/icons-react'
+import { IconArrowLeft, IconSearch, IconX, IconRefresh, IconRotate } from '@tabler/icons-react'
 import { CardSwipeFeed } from './CardSwipeFeed'
 import { generateCardsForWorks, generateCard } from '../api'
 import { CONTENT_LIBRARY, type Work } from '../contentLibrary'
@@ -194,6 +194,7 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
         loading={view.loading}
         error={view.error}
         onBack={goBack}
+        onRetry={() => handleSearch(view.query)}
         onGoDeeper={onGoDeeper}
         savedKeys={savedKeys}
         onToggleSave={onToggleSave}
@@ -234,13 +235,14 @@ interface SearchResultProps {
   loading: boolean
   error: string | null
   onBack: () => void
+  onRetry: () => void
   onGoDeeper?: (card: CardData) => void
   savedKeys?: Set<string>
   onToggleSave?: (card: CardData) => void
   onCardViewed?: (card: CardData) => void
 }
 
-function SearchResultView({ query, card, loading, error, onBack, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: SearchResultProps) {
+function SearchResultView({ query, card, loading, error, onBack, onRetry, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: SearchResultProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       {/* Header */}
@@ -283,6 +285,26 @@ function SearchResultView({ query, card, loading, error, onBack, onGoDeeper, sav
             {query}
           </div>
         </div>
+        {/* Regenerate button — forces a fresh API call */}
+        <button
+          onClick={onRetry}
+          disabled={loading}
+          title="Regenerate"
+          style={{
+            background: 'none',
+            border: '1px solid #E0DCD4',
+            borderRadius: 3,
+            padding: '6px 8px',
+            cursor: loading ? 'default' : 'pointer',
+            color: loading ? '#D0CCC4' : '#888',
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0,
+            marginBottom: 2,
+          }}
+        >
+          <IconRotate size={14} stroke={1.8} style={{ transform: loading ? 'none' : undefined }} />
+        </button>
       </div>
 
       {/* Progress bar */}

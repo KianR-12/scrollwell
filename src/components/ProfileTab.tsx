@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { CardData } from '../useCards'
+import { setBypassCache, clearCardCaches } from '../api'
 
 const ALL_INTERESTS = [
   'Mind & Body',
@@ -209,7 +210,105 @@ export function ProfileTab({ savedCount, history, email, onSignOut }: Props) {
         )}
 
         <div style={{ height: 24 }} />
+
+        {/* Dev tools — only visible in local dev */}
+        {import.meta.env.DEV && <DevTools />}
       </div>
+    </div>
+  )
+}
+
+// ── Dev tools (local only) ─────────────────────────────────────────────────────
+
+function DevTools() {
+  const [bypass, setBypass] = useState(false)
+  const [cleared, setCleared] = useState(false)
+
+  function toggleBypass() {
+    const next = !bypass
+    setBypass(next)
+    setBypassCache(next)
+    setCleared(false)
+  }
+
+  function handleClear() {
+    clearCardCaches()
+    setCleared(true)
+    setTimeout(() => setCleared(false), 2000)
+  }
+
+  return (
+    <div style={{ margin: '8px 20px 16px', padding: '14px 16px', border: '1px dashed #D0CCC4', borderRadius: 4 }}>
+      <div style={{
+        fontSize: 8.5,
+        fontWeight: 700,
+        letterSpacing: '1px',
+        textTransform: 'uppercase',
+        color: '#C0BDB4',
+        fontFamily: 'Inter, sans-serif',
+        marginBottom: 12,
+      }}>
+        Dev Tools
+      </div>
+
+      {/* Bypass toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#555', fontFamily: 'Inter, sans-serif' }}>
+            Bypass Supabase cache
+          </div>
+          <div style={{ fontSize: 10, color: '#aaa', fontFamily: 'Inter, sans-serif', marginTop: 2 }}>
+            Forces API calls for category cards
+          </div>
+        </div>
+        <button
+          onClick={toggleBypass}
+          style={{
+            width: 40,
+            height: 22,
+            borderRadius: 11,
+            border: 'none',
+            background: bypass ? '#111' : '#D0CCC4',
+            cursor: 'pointer',
+            position: 'relative',
+            transition: 'background 0.2s',
+            flexShrink: 0,
+          }}
+        >
+          <div style={{
+            position: 'absolute',
+            top: 3,
+            left: bypass ? 21 : 3,
+            width: 16,
+            height: 16,
+            borderRadius: '50%',
+            background: '#fff',
+            transition: 'left 0.2s',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+          }} />
+        </button>
+      </div>
+
+      {/* One-shot clear */}
+      <button
+        onClick={handleClear}
+        style={{
+          width: '100%',
+          padding: '9px 0',
+          background: 'none',
+          color: cleared ? '#888' : '#111',
+          border: '1px solid #D0CCC4',
+          borderRadius: 3,
+          fontFamily: 'Inter, sans-serif',
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '0.8px',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}
+      >
+        {cleared ? 'Cleared ✓' : 'Clear in-memory caches'}
+      </button>
     </div>
   )
 }

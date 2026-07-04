@@ -158,6 +158,23 @@ const deepDiveCache = new Map<string, DeepDiveData>()
 const categoryCache = new Map<string, CardData[]>()
 const workCardCache = new Map<string, CardData>()
 
+let _bypassCache = false
+
+export function setBypassCache(on: boolean) {
+  _bypassCache = on
+  if (on) {
+    workCardCache.clear()
+    categoryCache.clear()
+    deepDiveCache.clear()
+  }
+}
+
+export function clearCardCaches() {
+  workCardCache.clear()
+  categoryCache.clear()
+  deepDiveCache.clear()
+}
+
 async function fetchDeepDiveFromDb(title: string, creator: string): Promise<DeepDiveData | null> {
   const { data } = await supabase
     .from('deep_dive_cards')
@@ -274,29 +291,37 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
   // ── Tier 1: in-memory cache ──────────────────────────────────────────────
   const afterMemory: Work[] = []
   const afterMemoryIdx: number[] = []
-  for (let i = 0; i < works.length; i++) {
-    const hit = workCardCache.get(`${works[i].title}::${works[i].author}`)
-    if (hit) result[i] = hit
-    else { afterMemory.push(works[i]); afterMemoryIdx.push(i) }
+  if (!_bypassCache) {
+    for (let i = 0; i < works.length; i++) {
+      const hit = workCardCache.get(`${works[i].title}::${works[i].author}`)
+      if (hit) result[i] = hit
+      else { afterMemory.push(works[i]); afterMemoryIdx.push(i) }
+    }
+    if (afterMemory.length === 0) return result as CardData[]
+  } else {
+    works.forEach((w, i) => { afterMemory.push(w); afterMemoryIdx.push(i) })
   }
-  if (afterMemory.length === 0) return result as CardData[]
 
   // ── Tier 2: Supabase ─────────────────────────────────────────────────────
-  const dbMap = await fetchCardsFromDb(afterMemory.map(w => w.title))
   const afterDb: Work[] = []
   const afterDbIdx: number[] = []
-  for (let i = 0; i < afterMemory.length; i++) {
-    const work = afterMemory[i]
-    const fromDb = dbMap.get(`${work.title}::${work.author}`)
-    if (fromDb) {
-      workCardCache.set(`${work.title}::${work.author}`, fromDb)
-      result[afterMemoryIdx[i]] = fromDb
-    } else {
-      afterDb.push(work)
-      afterDbIdx.push(afterMemoryIdx[i])
+  if (!_bypassCache) {
+    const dbMap = await fetchCardsFromDb(afterMemory.map(w => w.title))
+    for (let i = 0; i < afterMemory.length; i++) {
+      const work = afterMemory[i]
+      const fromDb = dbMap.get(`${work.title}::${work.author}`)
+      if (fromDb) {
+        workCardCache.set(`${work.title}::${work.author}`, fromDb)
+        result[afterMemoryIdx[i]] = fromDb
+      } else {
+        afterDb.push(work)
+        afterDbIdx.push(afterMemoryIdx[i])
+      }
     }
+    if (afterDb.length === 0) return result as CardData[]
+  } else {
+    afterMemory.forEach((w, i) => { afterDb.push(w); afterDbIdx.push(afterMemoryIdx[i]) })
   }
-  if (afterDb.length === 0) return result as CardData[]
 
   // ── Tier 3: Anthropic API ────────────────────────────────────────────────
   const client = getClient()
