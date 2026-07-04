@@ -56,7 +56,7 @@ export function CardView({ card, index, total, onSave, saved, onGoDeeper }: Prop
       <div style={{ height: 1, background: '#111', marginBottom: 13, flexShrink: 0 }} />
 
       {/* Source row */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, marginBottom: card.relevance ? 10 : 13 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, marginBottom: 13 }}>
         {/* Book cover */}
         <div style={{
           flexShrink: 0,
@@ -91,44 +91,14 @@ export function CardView({ card, index, total, onSave, saved, onGoDeeper }: Prop
         </div>
       </div>
 
-      {/* Relevance now — only on search-generated cards */}
-      {card.relevance && (
-        <div style={{
-          fontSize: 10.5,
-          color: '#aaa',
-          fontFamily: 'Inter, sans-serif',
-          lineHeight: 1.55,
-          marginBottom: 10,
-        }}>
-          <span style={{ fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', fontSize: 8.5, color: '#C0BDB4' }}>
-            Now{'  '}
-          </span>
-          {card.relevance}
-        </div>
-      )}
-
       {/* Thin rule */}
       <div style={{ height: 1, background: '#E8E4DC', marginBottom: 11, flexShrink: 0 }} />
 
-      {/* Gist + howToTalk */}
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      {/* Gist */}
+      <div style={{ flex: 1, overflow: 'hidden' }}>
         <div style={{ fontSize: 13, color: '#555', lineHeight: 1.65 }}>
           {card.gist}
         </div>
-        {card.howToTalk && (
-          <div style={{
-            marginTop: 11,
-            paddingTop: 10,
-            borderTop: '1px solid #F0ECE4',
-            fontSize: 12,
-            color: '#888',
-            lineHeight: 1.6,
-            fontStyle: 'italic',
-            flexShrink: 0,
-          }}>
-            {card.howToTalk}
-          </div>
-        )}
       </div>
 
       {/* Bottom */}

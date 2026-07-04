@@ -33,7 +33,6 @@ export function dbRowToCard(row: DbRow): CardData {
     hookSub: row.hook_sub,
     gist: row.gist,
     socialCount: row.social_count,
-    howToTalk: row.conversation_tip || undefined,
     book: {
       title: row.title,
       author: row.creator,
@@ -65,7 +64,7 @@ export async function saveCardToDb(card: CardData, type: string): Promise<string
       hook: card.hook,
       hook_sub: card.hookSub,
       gist: card.gist,
-      conversation_tip: card.howToTalk ?? null,
+      conversation_tip: null,
       cover_url: `https://covers.openlibrary.org/b/isbn/${card.book.isbn}-M.jpg`,
       isbn: card.book.isbn,
       year: card.book.year,

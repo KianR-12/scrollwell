@@ -33,17 +33,13 @@ export function hasApiKey(): boolean {
 
 const CATEGORY_PROMPT = `You generate cards for a mobile reading app. Each card surfaces one sharp, surprising insight from a book — written like something worth dropping at dinner.
 
-For the requested category, pick the most interesting books. For each book, draw on your knowledge of events, policies, research, and cultural trends in 2026 to find a specific connection for the relevance field. Then generate a card for each.
-
 Return a JSON array with exactly the requested number of objects:
 [
   {
     "hook": "A single punchy, counterintuitive sentence in double quotes. A provocation, not a summary.",
     "hookSub": "A 6–10 word lowercase subtitle naming what the hook is really about.",
     "gist": "3–4 plain sentences backing the hook up. Concrete, no fluff. Write for someone smart who hasn't read the book.",
-    "howToTalk": "One sentence. Write it like you'd text a friend — 'next time [X] comes up just mention [Y]'. Casual, specific, never instructional.",
     "socialCount": 1234,
-    "relevance": "One sentence naming the specific 2026 event, policy, study, or debate you found that makes this book timely right now. Never vague.",
     "book": {
       "title": "Exact Book Title",
       "author": "First Last",
@@ -59,11 +55,9 @@ Rules:
 - hook is always wrapped in double-quote characters as part of the string value
 - hookSub is lowercase, no period at the end
 - gist has no bullet points, no headers, no em-dashes
-- howToTalk is one casual sentence, reads like a text from a friend — specific, never instructional
 - socialCount is a realistic integer between 900 and 4800
 - isbn must be a real valid ISBN-13 for a real published book (it will be used to load a cover image)
 - book.category must exactly match the requested category name
-- relevance names a specific 2026 event or development — never vague
 - No emojis anywhere
 - Return only valid JSON — nothing before or after the array`
 
@@ -101,17 +95,13 @@ Rules:
 
 const WORKS_PROMPT = `You generate cards for a mobile reading app. For each specific work listed, write one card surfacing its single sharpest, most surprising insight — written like something worth dropping at dinner.
 
-For each work, draw on your knowledge of events, policies, research, and cultural trends in 2026 to find a specific connection for the relevance field. Then write the card.
-
 Return a JSON array with exactly one object per work, in the same order they were listed:
 [
   {
     "hook": "A single punchy, counterintuitive sentence in double quotes. A provocation, not a summary.",
     "hookSub": "A 6–10 word lowercase subtitle naming what the hook is really about.",
     "gist": "3–4 plain sentences backing the hook up. Concrete, no fluff. Write for someone smart who hasn't read the work.",
-    "howToTalk": "One sentence. Write it like you'd text a friend — 'next time [X] comes up just mention [Y]'. Casual, specific, never instructional.",
     "socialCount": 1234,
-    "relevance": "One sentence naming the specific 2026 event, policy, study, or debate you found that makes this work timely right now. Never vague.",
     "book": {
       "title": "Exact title as provided",
       "author": "Exact author as provided",
@@ -128,11 +118,9 @@ Rules:
 - hook is always wrapped in double-quote characters as part of the string value
 - hookSub is lowercase, no period at the end
 - gist has no bullet points, no headers, no em-dashes
-- howToTalk is one casual sentence, reads like a text from a friend — specific, never instructional
 - socialCount is a realistic integer between 900 and 4800
 - isbn must be a real valid ISBN-13 for this specific work (used to load a cover image); for talks or articles use "0000000000000"
 - book.category must exactly match the provided category name
-- relevance names a specific 2026 event or development — never vague
 - No emojis anywhere
 - Return only valid JSON — nothing before or after the array`
 
@@ -140,16 +128,12 @@ const SEARCH_CARD_PROMPT = `You generate a single card for a mobile reading app 
 
 The user has searched for something — it might be a book title, an author, a TED talk, a podcast, an article, or a vague idea. Figure out the single best work to surface for their query and generate one card for it.
 
-Before writing the card, draw on your knowledge of events, policies, research, and cultural trends in 2026 to find a specific connection for the relevance field.
-
 Return a single JSON object (not an array):
 {
   "hook": "A single punchy, counterintuitive sentence in double quotes. A provocation, not a summary.",
   "hookSub": "A 6–10 word lowercase subtitle naming what the hook is really about.",
   "gist": "3–4 plain sentences backing the hook up. Concrete, no fluff. Write for someone smart who hasn't read the work.",
-  "howToTalk": "One sentence. Write it exactly like you'd text a friend right before dinner — 'next time [X] comes up just mention [Y]'. Has to be casual, specific, and feel like insider knowledge between friends. Never starts with 'Inform', 'Share', 'Tell', or 'Explain'.",
   "socialCount": 1234,
-  "relevance": "One sentence naming the specific event, study, ruling, or debate happening in 2026 that makes this work timely. Never vague — name the actual thing, not 'this topic is more relevant than ever'.",
   "book": {
     "title": "Exact title of the work",
     "author": "First Last",
@@ -164,10 +148,8 @@ Rules:
 - hook is always wrapped in double-quote characters as part of the string value
 - hookSub is lowercase, no period at the end
 - gist has no bullet points, no headers, no em-dashes
-- howToTalk is one sentence, casual, reads like a text from a friend
 - socialCount is a realistic integer between 900 and 4800
 - isbn must be a real valid ISBN-13 for this specific published work; for TED talks, podcasts, or articles use "0000000000000"
-- relevance must name a specific real 2026 event or development — never vague
 - No emojis anywhere
 - Return only valid JSON — nothing before or after`
 
@@ -285,15 +267,13 @@ export async function generateCards(categoryName: string, count = 3): Promise<Ca
   })
 
   const parsed = JSON.parse(extractText(msg.content as any[])) as Array<{
-    hook: string; hookSub: string; gist: string; howToTalk: string
-    socialCount: number; relevance: string
+    hook: string; hookSub: string; gist: string; socialCount: number
     book: { title: string; author: string; year: number; pages: number; isbn: string; category: string }
   }>
 
   const result = parsed.map(c => ({
     hook: c.hook, hookSub: c.hookSub, gist: c.gist,
     socialCount: c.socialCount, book: c.book,
-    howToTalk: c.howToTalk, relevance: c.relevance,
   }))
   categoryCache.set(categoryName, result)
   return result
@@ -324,7 +304,7 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
     for (let i = 0; i < afterMemory.length; i++) {
       const work = afterMemory[i]
       const fromDb = dbMap.get(`${work.title}::${work.author}`)
-      if (fromDb && fromDb.howToTalk) {
+      if (fromDb) {
         workCardCache.set(`${work.title}::${work.author}`, fromDb)
         result[afterMemoryIdx[i]] = fromDb
       } else {
@@ -354,7 +334,7 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
   })
 
   const parsed = JSON.parse(extractText(resp.content as any[])) as Array<{
-    hook: string; hookSub: string; gist: string; howToTalk: string; socialCount: number; relevance: string
+    hook: string; hookSub: string; gist: string; socialCount: number
     book: { title: string; author: string; year: number; pages: number; isbn: string; category: string }
   }>
 
@@ -364,7 +344,6 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
     const card: CardData = {
       hook: c.hook, hookSub: c.hookSub, gist: c.gist,
       socialCount: c.socialCount, book: c.book,
-      howToTalk: c.howToTalk, relevance: c.relevance,
     }
     workCardCache.set(`${work.title}::${work.author}`, card)
     result[afterDbIdx[i]] = card
@@ -387,13 +366,11 @@ export async function generateCard(query: string): Promise<CardData> {
   const text = extractText(resp.content as any[])
 
   const c = JSON.parse(text) as {
-    hook: string; hookSub: string; gist: string; howToTalk: string
-    socialCount: number; relevance: string
+    hook: string; hookSub: string; gist: string; socialCount: number
     book: { title: string; author: string; year: number; pages: number; isbn: string; category: string }
   }
   return {
     hook: c.hook, hookSub: c.hookSub, gist: c.gist,
     socialCount: c.socialCount, book: c.book,
-    howToTalk: c.howToTalk, relevance: c.relevance,
   }
 }

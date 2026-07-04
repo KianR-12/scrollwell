@@ -9,13 +9,9 @@ export interface CardData {
   hookSub: string
   gist: string
   socialCount: number
-  howToTalk?: string
-  relevance?: string
 }
 
 const SYSTEM_PROMPT = `You generate short cards for a mobile reading app. Each card surfaces one sharp, surprising insight from a book — written like something worth dropping at dinner.
-
-For each book, draw on your knowledge of events, policies, research, and cultural trends in 2026 to find a specific connection for the relevance field. Then generate the card.
 
 For each book return exactly this JSON shape (no markdown, no explanation, just the array):
 [
@@ -23,9 +19,7 @@ For each book return exactly this JSON shape (no markdown, no explanation, just 
     "hook": "A single punchy, counterintuitive sentence in double quotes. It should feel like a provocation or a reveal — not a summary.",
     "hookSub": "A 6–10 word lowercase subtitle that names what the hook is really about.",
     "gist": "3–4 plain sentences that back the hook up. Concrete, no fluff. Write for someone smart who has never opened the book.",
-    "howToTalk": "One sentence. Write it like you'd text a friend — 'next time [X] comes up just mention [Y]'. Casual, specific, never instructional.",
-    "socialCount": 1234,
-    "relevance": "One sentence naming the specific 2026 event, policy, study, or debate you found that makes this book timely right now. Never vague."
+    "socialCount": 1234
   }
 ]
 
@@ -33,9 +27,7 @@ Rules:
 - hook is always in double-quotes as part of the string value
 - hookSub is lowercase, no period
 - gist has no bullet points, no headers, no em-dashes
-- howToTalk is one casual sentence, reads like a text from a friend — specific, never instructional
 - socialCount is a plausible integer between 900 and 4800
-- relevance names a specific 2026 event or development — never vague
 - No emojis anywhere
 - Return only valid JSON — nothing before or after the array`
 
@@ -93,19 +85,15 @@ export function useCards() {
         return
       }
 
-      let servedFromCache = false
-
       try {
-        // ── Tier 1: Supabase — serve immediately so feed never blocks ─────
+        // ── Tier 1: Supabase ──────────────────────────────────────────────
         const dbMap = await fetchCardsFromDb(BOOKS.map(b => b.title))
         if (dbMap.size === BOOKS.length) {
           const fromDb = BOOKS.map(b => dbMap.get(`${b.title}::${b.author}`)).filter(Boolean) as CardData[]
           if (fromDb.length === BOOKS.length) {
             setCards(fromDb)
             setLoading(false)
-            servedFromCache = true
-            if (fromDb.every(c => !!c.howToTalk)) return // cache is complete, done
-            // else: cache is stale — fall through to background refresh
+            return
           }
         }
 
@@ -115,7 +103,7 @@ export function useCards() {
 
         const resp = await client.messages.create({
           model: 'claude-sonnet-4-6',
-          max_tokens: 4096,
+          max_tokens: 2048,
           system: SYSTEM_PROMPT,
           messages: [{ role: 'user', content: `Generate cards for these 6 books:\n${bookList}` }],
         })
@@ -126,23 +114,19 @@ export function useCards() {
           .join('')
           .replace(/```json/g, '').replace(/```/g, '').trim()
         const parsed = JSON.parse(text) as Array<{
-          hook: string; hookSub: string; gist: string
-          howToTalk: string; socialCount: number; relevance: string
+          hook: string; hookSub: string; gist: string; socialCount: number
         }>
         const cards = parsed.map((c, i) => ({
           book: BOOKS[i],
           hook: c.hook, hookSub: c.hookSub, gist: c.gist,
-          socialCount: c.socialCount, howToTalk: c.howToTalk, relevance: c.relevance,
+          socialCount: c.socialCount,
         }))
         setCards(cards)
         cards.forEach(card => saveCardToDb(card, 'book').catch(() => {}))
       } catch (err) {
-        // Only fall back to static content if nothing was served from cache yet
-        if (!servedFromCache) {
-          console.error('Anthropic error:', err)
-          setError('API error — showing static content.')
-          setCards(FALLBACK.map((c, i) => ({ book: BOOKS[i], ...c })))
-        }
+        console.error('Anthropic error:', err)
+        setError('API error — showing static content.')
+        setCards(FALLBACK.map((c, i) => ({ book: BOOKS[i], ...c })))
       } finally {
         setLoading(false)
       }
