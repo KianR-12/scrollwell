@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { IconArrowLeft, IconSearch, IconX } from '@tabler/icons-react'
+import { IconArrowLeft, IconSearch, IconX, IconRefresh } from '@tabler/icons-react'
 import { CardSwipeFeed } from './CardSwipeFeed'
 import { generateCardsForWorks, generateCard } from '../api'
 import { CONTENT_LIBRARY, type Work } from '../contentLibrary'
@@ -27,6 +27,31 @@ const CATEGORIES: Category[] = [
 
 const BATCH = 5
 
+// ── Session cursor helpers (survives tab switches since ExploreTab unmounts) ────
+
+const SESSION_KEY = 'scrollwell:explore:cursors'
+
+function readCursors(): Map<string, number> {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY)
+    return raw ? new Map(JSON.parse(raw) as [string, number][]) : new Map()
+  } catch { return new Map() }
+}
+
+function writeCursor(category: string, cursor: number) {
+  try {
+    const m = readCursors()
+    m.set(category, cursor)
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify([...m]))
+  } catch {}
+}
+
+function resetCursor(category: string) {
+  writeCursor(category, 0)
+}
+
+// ────────────────────────────────────────────────────────────────────────────────
+
 interface ExploreProps {
   onGoDeeper?: (card: CardData) => void
   savedKeys?: Set<string>
@@ -45,26 +70,41 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
   const [initialLoading, setInitialLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [exhausted, setExhausted] = useState(false)
 
   const worksRef = useRef<Work[]>([])
   const nextBatchRef = useRef(0)
   const isLoadingMore = useRef(false)
+  // Tracks the last card index seen; detects swipe-past-end (goNext clamps + re-fires same index)
+  const prevCardIndexRef = useRef<number>(-1)
 
   async function openCategory(cat: Category) {
+    const works = CONTENT_LIBRARY[cat.title] ?? []
+    const startIdx = readCursors().get(cat.title) ?? 0
+
     setView({ kind: 'category', cat })
     setError(null)
     setCards([])
-    setInitialLoading(true)
-
-    const works = CONTENT_LIBRARY[cat.title] ?? []
+    setExhausted(false)
+    prevCardIndexRef.current = -1
     worksRef.current = works
-    nextBatchRef.current = 0
+
+    // Already seen every work in this category
+    if (works.length > 0 && startIdx >= works.length) {
+      setExhausted(true)
+      return
+    }
+
+    setInitialLoading(true)
+    nextBatchRef.current = startIdx
 
     try {
-      const batch = works.slice(0, BATCH)
+      const end = Math.min(startIdx + BATCH, works.length)
+      const batch = works.slice(startIdx, end)
       const result = await generateCardsForWorks(batch, cat.title)
       setCards(result)
-      nextBatchRef.current = BATCH
+      nextBatchRef.current = end
+      writeCursor(cat.title, end)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load cards')
     } finally {
@@ -96,10 +136,12 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
     isLoadingMore.current = true
     setLoadingMore(true)
     try {
-      const batch = works.slice(start, start + BATCH)
-      const newCards = await generateCardsForWorks(batch, view.kind === 'category' ? view.cat.title : '')
+      const end = Math.min(start + BATCH, works.length)
+      const batch = works.slice(start, end)
+      const newCards = await generateCardsForWorks(batch, view.cat.title)
       setCards(prev => [...prev, ...newCards])
-      nextBatchRef.current = start + batch.length
+      nextBatchRef.current = end
+      writeCursor(view.cat.title, end)
     } catch {
       // silent
     } finally {
@@ -111,13 +153,37 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
   function onCardIndexChange(i: number) {
     const loaded = cards.length
     const total = worksRef.current.length
+
+    // Eagerly load next batch when approaching the end
     if (i >= loaded - 2 && nextBatchRef.current < total) loadMore()
+
+    // Detect swipe-past-end: CardSwipeFeed clamps at total-1 and re-fires onIndexChange
+    // with the same index — that's the rubber-band moment signaling the user tried to go further
+    if (
+      i === prevCardIndexRef.current &&
+      i === loaded - 1 &&
+      loaded > 0 &&
+      nextBatchRef.current >= total &&
+      !isLoadingMore.current
+    ) {
+      setExhausted(true)
+    }
+    prevCardIndexRef.current = i
   }
 
   function goBack() {
     setView({ kind: 'grid' })
     setCards([])
     setError(null)
+    setExhausted(false)
+    prevCardIndexRef.current = -1
+  }
+
+  function refreshCategory() {
+    if (view.kind !== 'category') return
+    const cat = view.cat
+    resetCursor(cat.title)
+    openCategory(cat)
   }
 
   if (view.kind === 'search') {
@@ -145,7 +211,9 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
         loadingMore={loadingMore}
         totalWorks={worksRef.current.length}
         error={error}
+        exhausted={exhausted}
         onBack={goBack}
+        onRefresh={refreshCategory}
         onGoDeeper={onGoDeeper}
         onCardIndexChange={onCardIndexChange}
         savedKeys={savedKeys}
@@ -400,7 +468,9 @@ interface FeedProps {
   loadingMore: boolean
   totalWorks: number
   error: string | null
+  exhausted: boolean
   onBack: () => void
+  onRefresh: () => void
   onGoDeeper?: (card: CardData) => void
   onCardIndexChange: (i: number) => void
   savedKeys?: Set<string>
@@ -408,7 +478,7 @@ interface FeedProps {
   onCardViewed?: (card: CardData) => void
 }
 
-function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error, onBack, onGoDeeper, onCardIndexChange, savedKeys, onToggleSave, onCardViewed }: FeedProps) {
+function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error, exhausted, onBack, onRefresh, onGoDeeper, onCardIndexChange, savedKeys, onToggleSave, onCardViewed }: FeedProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       {/* Header */}
@@ -436,7 +506,7 @@ function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error
 
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontSize: 11, color: '#aaa', fontWeight: 500 }}>
-            {loading ? '…' : cards.length < totalWorks ? `${cards.length} of ${totalWorks}` : `${cards.length} cards`}
+            {loading ? '…' : exhausted ? `${totalWorks} of ${totalWorks}` : cards.length < totalWorks ? `${cards.length} of ${totalWorks}` : `${cards.length} cards`}
           </div>
           <div style={{ fontSize: 9, color: '#ccc', letterSpacing: '0.3px', marginTop: 1 }}>
             {loadingMore ? 'loading more…' : category.sub}
@@ -467,7 +537,16 @@ function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error
         </div>
       )}
 
-      {!error && (
+      {!error && exhausted && (
+        <ExhaustedView
+          category={category.title}
+          totalWorks={totalWorks}
+          onRefresh={onRefresh}
+          onBack={onBack}
+        />
+      )}
+
+      {!error && !exhausted && (
         <CardSwipeFeed
           cards={cards}
           loading={loading}
@@ -478,6 +557,101 @@ function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error
           onCardViewed={onCardViewed}
         />
       )}
+    </div>
+  )
+}
+
+// ── Exhausted end-of-category view ─────────────────────────────────────────────
+
+function ExhaustedView({ category, totalWorks, onRefresh, onBack }: {
+  category: string
+  totalWorks: number
+  onRefresh: () => void
+  onBack: () => void
+}) {
+  return (
+    <div style={{
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 32px 48px',
+      textAlign: 'center',
+    }}>
+      {/* Rule */}
+      <div style={{ width: 32, height: 1.5, background: '#D0CCC4', marginBottom: 24 }} />
+
+      {/* Heading */}
+      <div style={{
+        fontFamily: '"Playfair Display", serif',
+        fontSize: 20,
+        fontWeight: 700,
+        color: '#111',
+        lineHeight: 1.3,
+        marginBottom: 10,
+      }}>
+        You've seen everything<br />in {category}.
+      </div>
+
+      {/* Body */}
+      <div style={{
+        fontSize: 13,
+        color: '#888',
+        fontFamily: 'Inter, sans-serif',
+        lineHeight: 1.65,
+        marginBottom: 36,
+      }}>
+        {totalWorks === 1
+          ? 'That was the only work in this category.'
+          : `You went through all ${totalWorks} works. Start over to see them again.`}
+      </div>
+
+      {/* Start Over */}
+      <button
+        onClick={onRefresh}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 7,
+          width: '100%',
+          padding: '14px 0',
+          background: '#111',
+          color: '#fff',
+          border: 'none',
+          fontFamily: 'Inter, sans-serif',
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '1.2px',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+          justifyContent: 'center',
+          marginBottom: 12,
+        }}
+      >
+        <IconRefresh size={13} stroke={2} />
+        Start Over
+      </button>
+
+      {/* Back */}
+      <button
+        onClick={onBack}
+        style={{
+          width: '100%',
+          padding: '13px 0',
+          background: 'none',
+          color: '#111',
+          border: '1.5px solid #D0CCC4',
+          fontFamily: 'Inter, sans-serif',
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '1.2px',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+        }}
+      >
+        Back to Explore
+      </button>
     </div>
   )
 }
