@@ -77,7 +77,7 @@ Return a JSON object — no markdown, no explanation:
       "title": "2–4 word label for this chapter or idea, in title case",
       "hook": "A punchy, counterintuitive statement in double quotes — the core insight of this part.",
       "gist": "3–4 sentences explaining this idea directly and completely. Concrete, no fluff. Write for someone who hasn't read the work.",
-      "howToTalk": "One sentence starting with 'Bring this up when'. Write it the way you'd text a friend — casual, specific, never instructional. Like 'Bring this up when someone says X — just point out Y'. Insider knowledge, not a lesson.",
+      "howToTalk": "One sentence written like you'd text a friend — 'next time [X] comes up just mention [Y]'. Casual, specific, never instructional. Reads like insider knowledge, not advice.",
       "relevance": "One sentence under 20 words connecting THIS chapter's specific concept to something real happening in 2026. Must be a genuine, direct connection — not a stretch. Empty string if no real connection exists."
     }
   ]
@@ -86,7 +86,7 @@ Return a JSON object — no markdown, no explanation:
 Rules:
 - title is 2–4 words in title case, naming this idea or chapter
 - hook is always wrapped in double-quote characters as part of the string value
-- howToTalk must start with the exact words 'Bring this up when'
+- howToTalk is one casual sentence — reads like a friend texting you, never instructional, never starts with 'Bring this up'
 - gist has no bullet points, no em-dashes, no headers
 - relevance is per-section, specific to that chapter's concept, under 20 words — or empty string ""
 - Never write a vague relevance like "this is more relevant than ever" — name the actual thing or leave it blank
@@ -226,11 +226,13 @@ export async function generateDeepDive(card: CardData): Promise<DeepDiveData> {
   const cached = deepDiveCache.get(cacheKey)
   if (cached) return cached
 
-  // Tier 2: Supabase
+  // Tier 2: Supabase — reject if any section uses the old "Bring this up when" format
   const fromDb = await fetchDeepDiveFromDb(title, author)
-  if (fromDb && fromDb.sections.every(s => !!s.howToTalk)) {
-    deepDiveCache.set(cacheKey, fromDb)
-    return fromDb
+  const isFresh = fromDb &&
+    fromDb.sections.every(s => !!s.howToTalk && !s.howToTalk.startsWith('Bring this up'))
+  if (isFresh) {
+    deepDiveCache.set(cacheKey, fromDb!)
+    return fromDb!
   }
 
   // Tier 3: Anthropic API
