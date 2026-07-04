@@ -93,15 +93,19 @@ export function useCards() {
         return
       }
 
+      let servedFromCache = false
+
       try {
-        // ── Tier 1: Supabase ──────────────────────────────────────────────
+        // ── Tier 1: Supabase — serve immediately so feed never blocks ─────
         const dbMap = await fetchCardsFromDb(BOOKS.map(b => b.title))
         if (dbMap.size === BOOKS.length) {
           const fromDb = BOOKS.map(b => dbMap.get(`${b.title}::${b.author}`)).filter(Boolean) as CardData[]
-          if (fromDb.length === BOOKS.length && fromDb.every(c => !!c.howToTalk)) {
+          if (fromDb.length === BOOKS.length) {
             setCards(fromDb)
             setLoading(false)
-            return
+            servedFromCache = true
+            if (fromDb.every(c => !!c.howToTalk)) return // cache is complete, done
+            // else: cache is stale — fall through to background refresh
           }
         }
 
@@ -111,7 +115,7 @@ export function useCards() {
 
         const resp = await client.messages.create({
           model: 'claude-sonnet-4-6',
-          max_tokens: 2048,
+          max_tokens: 4096,
           system: SYSTEM_PROMPT,
           messages: [{ role: 'user', content: `Generate cards for these 6 books:\n${bookList}` }],
         })
@@ -133,9 +137,12 @@ export function useCards() {
         setCards(cards)
         cards.forEach(card => saveCardToDb(card, 'book').catch(() => {}))
       } catch (err) {
-        console.error('Anthropic error:', err)
-        setError('API error — showing static content.')
-        setCards(FALLBACK.map((c, i) => ({ book: BOOKS[i], ...c })))
+        // Only fall back to static content if nothing was served from cache yet
+        if (!servedFromCache) {
+          console.error('Anthropic error:', err)
+          setError('API error — showing static content.')
+          setCards(FALLBACK.map((c, i) => ({ book: BOOKS[i], ...c })))
+        }
       } finally {
         setLoading(false)
       }
