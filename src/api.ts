@@ -246,7 +246,7 @@ export async function generateDeepDive(card: CardData): Promise<DeepDiveData> {
 
   // Tier 2: Supabase
   const fromDb = await fetchDeepDiveFromDb(title, author)
-  if (fromDb) {
+  if (fromDb && fromDb.sections.every(s => !!s.howToTalk)) {
     deepDiveCache.set(cacheKey, fromDb)
     return fromDb
   }
@@ -324,7 +324,7 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
     for (let i = 0; i < afterMemory.length; i++) {
       const work = afterMemory[i]
       const fromDb = dbMap.get(`${work.title}::${work.author}`)
-      if (fromDb) {
+      if (fromDb && fromDb.howToTalk) {
         workCardCache.set(`${work.title}::${work.author}`, fromDb)
         result[afterMemoryIdx[i]] = fromDb
       } else {

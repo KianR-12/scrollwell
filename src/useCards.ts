@@ -98,7 +98,7 @@ export function useCards() {
         const dbMap = await fetchCardsFromDb(BOOKS.map(b => b.title))
         if (dbMap.size === BOOKS.length) {
           const fromDb = BOOKS.map(b => dbMap.get(`${b.title}::${b.author}`)).filter(Boolean) as CardData[]
-          if (fromDb.length === BOOKS.length) {
+          if (fromDb.length === BOOKS.length && fromDb.every(c => !!c.howToTalk)) {
             setCards(fromDb)
             setLoading(false)
             return
