@@ -12,6 +12,7 @@ export interface DeepDiveSection {
 
 export interface DeepDiveData {
   description: string
+  relevance?: string
   sections: DeepDiveSection[]
 }
 
@@ -31,7 +32,7 @@ export function hasApiKey(): boolean {
 
 const CATEGORY_PROMPT = `You generate cards for a mobile reading app. Each card surfaces one sharp, surprising insight from a book — written like something worth dropping at dinner.
 
-For the requested category, pick the most interesting books and generate a card for each.
+For the requested category, pick the most interesting books. For each book, use web_search to find something specific happening in 2026 that connects to it — a policy, study, ruling, or cultural moment. Then generate a card for each.
 
 Return a JSON array with exactly the requested number of objects:
 [
@@ -39,7 +40,9 @@ Return a JSON array with exactly the requested number of objects:
     "hook": "A single punchy, counterintuitive sentence in double quotes. A provocation, not a summary.",
     "hookSub": "A 6–10 word lowercase subtitle naming what the hook is really about.",
     "gist": "3–4 plain sentences backing the hook up. Concrete, no fluff. Write for someone smart who hasn't read the book.",
+    "howToTalk": "One sentence. Write it like you'd text a friend — 'next time [X] comes up just mention [Y]'. Casual, specific, never instructional.",
     "socialCount": 1234,
+    "relevance": "One sentence naming the specific 2026 event, policy, study, or debate you found that makes this book timely right now. Never vague.",
     "book": {
       "title": "Exact Book Title",
       "author": "First Last",
@@ -55,13 +58,17 @@ Rules:
 - hook is always wrapped in double-quote characters as part of the string value
 - hookSub is lowercase, no period at the end
 - gist has no bullet points, no headers, no em-dashes
+- howToTalk is one casual sentence, reads like a text from a friend — specific, never instructional
 - socialCount is a realistic integer between 900 and 4800
 - isbn must be a real valid ISBN-13 for a real published book (it will be used to load a cover image)
 - book.category must exactly match the requested category name
+- relevance names a specific 2026 event or development from web search — never vague
 - No emojis anywhere
 - Return only valid JSON — nothing before or after the array`
 
 const DEEP_DIVE_PROMPT = `You break books, articles, and talks into their most important parts for a mobile reading app called scrollwell.
+
+Before writing any sections, use web_search to find something specific happening in 2026 that connects to this work — a policy, study, court ruling, cultural moment, or ongoing debate. You'll use this for the relevance field.
 
 Read the work and decide how many cards it actually needs to cover it properly. Cover everything that matters, skip nothing important, and don't pad with filler cards just to hit a number. The count should come from the content, not a rule.
 
@@ -70,6 +77,7 @@ Each card must fully explain its point. Never tease or say "the author explores"
 Return a JSON object — no markdown, no explanation:
 {
   "description": "One sentence. What this work is fundamentally about and why it matters.",
+  "relevance": "One sentence naming the specific 2026 event, policy, study, or debate you found that makes this work timely right now. Never vague.",
   "sections": [
     {
       "title": "2–4 word label for this chapter or idea, in title case",
@@ -85,10 +93,13 @@ Rules:
 - hook is always wrapped in double-quote characters as part of the string value
 - howToTalk must start with the exact words 'Bring this up when'
 - gist has no bullet points, no em-dashes, no headers
+- relevance names a specific 2026 event or development from web search — never vague
 - No emojis anywhere
 - Return only valid JSON`
 
 const WORKS_PROMPT = `You generate cards for a mobile reading app. For each specific work listed, write one card surfacing its single sharpest, most surprising insight — written like something worth dropping at dinner.
+
+For each work, use web_search to find something specific happening in 2026 that makes it timely — a policy, study, ruling, trend, or cultural moment. Then write the card.
 
 Return a JSON array with exactly one object per work, in the same order they were listed:
 [
@@ -96,7 +107,9 @@ Return a JSON array with exactly one object per work, in the same order they wer
     "hook": "A single punchy, counterintuitive sentence in double quotes. A provocation, not a summary.",
     "hookSub": "A 6–10 word lowercase subtitle naming what the hook is really about.",
     "gist": "3–4 plain sentences backing the hook up. Concrete, no fluff. Write for someone smart who hasn't read the work.",
+    "howToTalk": "One sentence. Write it like you'd text a friend — 'next time [X] comes up just mention [Y]'. Casual, specific, never instructional.",
     "socialCount": 1234,
+    "relevance": "One sentence naming the specific 2026 event, policy, study, or debate you found that makes this work timely right now. Never vague.",
     "book": {
       "title": "Exact title as provided",
       "author": "Exact author as provided",
@@ -113,9 +126,11 @@ Rules:
 - hook is always wrapped in double-quote characters as part of the string value
 - hookSub is lowercase, no period at the end
 - gist has no bullet points, no headers, no em-dashes
+- howToTalk is one casual sentence, reads like a text from a friend — specific, never instructional
 - socialCount is a realistic integer between 900 and 4800
 - isbn must be a real valid ISBN-13 for this specific work (used to load a cover image); for talks or articles use "0000000000000"
 - book.category must exactly match the provided category name
+- relevance names a specific 2026 event or development from web search — never vague
 - No emojis anywhere
 - Return only valid JSON — nothing before or after the array`
 
@@ -175,6 +190,17 @@ export function clearCardCaches() {
   deepDiveCache.clear()
 }
 
+const WEB_SEARCH_TOOL: any[] = [{ type: 'web_search_20260318', name: 'web_search' }]
+const WEB_SEARCH_BETA: any[] = ['web-search-2026-03-18']
+
+function extractBetaText(content: any[]): string {
+  return content
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text as string)
+    .join('')
+    .replace(/```json/g, '').replace(/```/g, '').trim()
+}
+
 async function fetchDeepDiveFromDb(title: string, creator: string): Promise<DeepDiveData | null> {
   const { data } = await supabase
     .from('deep_dive_cards')
@@ -227,9 +253,11 @@ export async function generateDeepDive(card: CardData): Promise<DeepDiveData> {
 
   // Tier 3: Anthropic API
   const client = getClient()
-  const msg = await client.messages.create({
+  const resp = await client.beta.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 4096,
+    tools: WEB_SEARCH_TOOL,
+    betas: WEB_SEARCH_BETA,
     system: DEEP_DIVE_PROMPT,
     messages: [{
       role: 'user',
@@ -237,11 +265,7 @@ export async function generateDeepDive(card: CardData): Promise<DeepDiveData> {
     }],
   })
 
-  const text = (msg.content[0].type === 'text' ? msg.content[0].text : '')
-    .replace(/```json/g, '')
-    .replace(/```/g, '')
-    .trim()
-  const result = JSON.parse(text) as DeepDiveData
+  const result = JSON.parse(extractBetaText(resp.content as any[])) as DeepDiveData
   deepDiveCache.set(cacheKey, result)
   saveDeepDiveToDb(title, author, result).catch(() => {})
   return result
@@ -252,9 +276,11 @@ export async function generateCards(categoryName: string, count = 3): Promise<Ca
   if (cached) return cached
 
   const client = getClient()
-  const msg = await client.messages.create({
+  const resp = await client.beta.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
+    tools: WEB_SEARCH_TOOL,
+    betas: WEB_SEARCH_BETA,
     system: CATEGORY_PROMPT,
     messages: [{
       role: 'user',
@@ -262,24 +288,16 @@ export async function generateCards(categoryName: string, count = 3): Promise<Ca
     }],
   })
 
-  const text = (msg.content[0].type === 'text' ? msg.content[0].text : '')
-    .replace(/```json/g, '')
-    .replace(/```/g, '')
-    .trim()
-  const parsed = JSON.parse(text) as Array<{
-    hook: string
-    hookSub: string
-    gist: string
-    socialCount: number
+  const parsed = JSON.parse(extractBetaText(resp.content as any[])) as Array<{
+    hook: string; hookSub: string; gist: string; howToTalk: string
+    socialCount: number; relevance: string
     book: { title: string; author: string; year: number; pages: number; isbn: string; category: string }
   }>
 
   const result = parsed.map(c => ({
-    hook: c.hook,
-    hookSub: c.hookSub,
-    gist: c.gist,
-    socialCount: c.socialCount,
-    book: c.book,
+    hook: c.hook, hookSub: c.hookSub, gist: c.gist,
+    socialCount: c.socialCount, book: c.book,
+    howToTalk: c.howToTalk, relevance: c.relevance,
   }))
   categoryCache.set(categoryName, result)
   return result
@@ -329,9 +347,11 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
     .map((w, i) => `${i + 1}. "${w.title}" by ${w.author} (${w.type}, ${w.year})`)
     .join('\n')
 
-  const msg = await client.messages.create({
+  const resp = await client.beta.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
+    tools: WEB_SEARCH_TOOL,
+    betas: WEB_SEARCH_BETA,
     system: WORKS_PROMPT,
     messages: [{
       role: 'user',
@@ -339,17 +359,19 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
     }],
   })
 
-  const text = (msg.content[0].type === 'text' ? msg.content[0].text : '')
-    .replace(/```json/g, '').replace(/```/g, '').trim()
-  const parsed = JSON.parse(text) as Array<{
-    hook: string; hookSub: string; gist: string; socialCount: number
+  const parsed = JSON.parse(extractBetaText(resp.content as any[])) as Array<{
+    hook: string; hookSub: string; gist: string; howToTalk: string; socialCount: number; relevance: string
     book: { title: string; author: string; year: number; pages: number; isbn: string; category: string }
   }>
 
   parsed.forEach((c, i) => {
     const work = afterDb[i]
     if (!work) return
-    const card: CardData = { hook: c.hook, hookSub: c.hookSub, gist: c.gist, socialCount: c.socialCount, book: c.book }
+    const card: CardData = {
+      hook: c.hook, hookSub: c.hookSub, gist: c.gist,
+      socialCount: c.socialCount, book: c.book,
+      howToTalk: c.howToTalk, relevance: c.relevance,
+    }
     workCardCache.set(`${work.title}::${work.author}`, card)
     result[afterDbIdx[i]] = card
     saveCardToDb(card, work.type).catch(() => {})
