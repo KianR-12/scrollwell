@@ -246,7 +246,24 @@ function ChapterCard({ section, chapterNum, card }: ChapterCardProps) {
       </div>
 
       {/* Rule */}
-      <div style={{ height: 1, background: '#111', marginBottom: 14, flexShrink: 0 }} />
+      <div style={{ height: 1, background: '#111', marginBottom: section.relevance ? 10 : 14, flexShrink: 0 }} />
+
+      {/* Right now */}
+      {section.relevance && (
+        <div style={{
+          fontSize: 10.5,
+          color: '#aaa',
+          fontFamily: 'Inter, sans-serif',
+          lineHeight: 1.5,
+          marginBottom: 12,
+          flexShrink: 0,
+        }}>
+          <span style={{ fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', fontSize: 8.5, color: '#C0BDB4' }}>
+            Right now{'  '}
+          </span>
+          {section.relevance}
+        </div>
+      )}
 
       {/* Gist */}
       <div style={{

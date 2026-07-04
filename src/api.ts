@@ -8,6 +8,7 @@ export interface DeepDiveSection {
   hook: string
   gist: string
   howToTalk: string
+  relevance?: string
 }
 
 export interface DeepDiveData {
@@ -68,22 +69,22 @@ Rules:
 
 const DEEP_DIVE_PROMPT = `You break books, articles, and talks into their most important parts for a mobile reading app called scrollwell.
 
-Before writing any sections, draw on your knowledge of events, policies, research, and cultural trends in 2026 to identify something specific that connects to this work. You'll use this for the relevance field.
-
 Read the work and decide how many cards it actually needs to cover it properly. Cover everything that matters, skip nothing important, and don't pad with filler cards just to hit a number. The count should come from the content, not a rule.
 
 Each card must fully explain its point. Never tease or say "the author explores" or "you'll discover" or "this section reveals". Just explain it directly and completely. The reader should finish each card actually understanding the idea, not feeling like they need to read the original to get the answer. Write like a brilliant friend who read the book and is explaining it to you over dinner — specific, honest, complete.
 
+For each section, think carefully about what that specific chapter concept is actually about — then ask whether something specific is happening in 2026 that directly connects to it. If a chapter is about environment design, find a real 2026 story about environment design. If it's about identity, find something about identity. The connection must be real, not forced. If no genuine current event connects to this specific chapter concept, use an empty string for relevance.
+
 Return a JSON object — no markdown, no explanation:
 {
   "description": "One sentence. What this work is fundamentally about and why it matters.",
-  "relevance": "One sentence naming the specific 2026 event, policy, study, or debate you found that makes this work timely right now. Never vague.",
   "sections": [
     {
       "title": "2–4 word label for this chapter or idea, in title case",
       "hook": "A punchy, counterintuitive statement in double quotes — the core insight of this part.",
       "gist": "3–4 sentences explaining this idea directly and completely. Concrete, no fluff. Write for someone who hasn't read the work.",
-      "howToTalk": "One sentence starting with 'Bring this up when'. Write it the way you'd text a friend — casual, specific, never instructional. Like 'Bring this up when someone says X — just point out Y'. Insider knowledge, not a lesson."
+      "howToTalk": "One sentence starting with 'Bring this up when'. Write it the way you'd text a friend — casual, specific, never instructional. Like 'Bring this up when someone says X — just point out Y'. Insider knowledge, not a lesson.",
+      "relevance": "One sentence under 20 words connecting THIS chapter's specific concept to something real happening in 2026. Must be a genuine, direct connection — not a stretch. Empty string if no real connection exists."
     }
   ]
 }
@@ -93,7 +94,8 @@ Rules:
 - hook is always wrapped in double-quote characters as part of the string value
 - howToTalk must start with the exact words 'Bring this up when'
 - gist has no bullet points, no em-dashes, no headers
-- relevance names a specific 2026 event or development — never vague
+- relevance is per-section, specific to that chapter's concept, under 20 words — or empty string ""
+- Never write a vague relevance like "this is more relevant than ever" — name the actual thing or leave it blank
 - No emojis anywhere
 - Return only valid JSON`
 
@@ -213,6 +215,7 @@ async function fetchDeepDiveFromDb(title: string, creator: string): Promise<Deep
       hook: row.hook,
       gist: row.gist,
       howToTalk: row.conversation_tip,
+      relevance: row.chapter_relevance || undefined,
     })),
   }
 }
