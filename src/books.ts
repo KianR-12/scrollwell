@@ -5,6 +5,8 @@ export interface Book {
   pages: number
   isbn: string
   category: string
+  type?: string
+  url?: string
 }
 
 export const BOOKS: Book[] = [

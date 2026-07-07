@@ -1,8 +1,9 @@
 export interface Work {
   title: string
   author: string
-  type: 'book' | 'talk' | 'article'
+  type: 'book' | 'talk' | 'podcast' | 'article'
   year: number
+  url?: string
 }
 
 export const CONTENT_LIBRARY: Record<string, Work[]> = {
@@ -27,6 +28,9 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'How to Change Your Mind', author: 'Michael Pollan', type: 'book', year: 2018 },
     { title: 'The Telomere Effect', author: 'Elizabeth Blackburn', type: 'book', year: 2017 },
     { title: 'The Happiness Advantage', author: 'Shawn Achor', type: 'book', year: 2010 },
+    { title: 'How to Make Stress Your Friend', author: 'Kelly McGonigal', type: 'talk', year: 2013, url: 'https://www.youtube.com/watch?v=RcGyVTAoXEU' },
+    { title: 'Sleep Is Your Superpower', author: 'Matt Walker', type: 'talk', year: 2019, url: 'https://www.youtube.com/watch?v=5MuIMqhT8pM' },
+    { title: 'Huberman Lab', author: 'Andrew Huberman', type: 'podcast', year: 2021, url: 'https://open.spotify.com/show/79CkJF3UJTHFV8Dse3Oy0P' },
   ],
 
   'Habits': [
@@ -50,6 +54,10 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'Daily Rituals', author: 'Mason Currey', type: 'book', year: 2013 },
     { title: 'The Compound Effect', author: 'Darren Hardy', type: 'book', year: 2010 },
     { title: 'The Miracle Morning', author: 'Hal Elrod', type: 'book', year: 2012 },
+    { title: 'Inside the Mind of a Master Procrastinator', author: 'Tim Urban', type: 'talk', year: 2016, url: 'https://www.youtube.com/watch?v=arj7oStGLkU' },
+    { title: 'Grit: The Power of Passion and Perseverance', author: 'Angela Duckworth', type: 'talk', year: 2013, url: 'https://www.youtube.com/watch?v=H14bBuluwB8' },
+    { title: 'The Power of Believing That You Can Improve', author: 'Carol Dweck', type: 'talk', year: 2014, url: 'https://www.youtube.com/watch?v=_X0mgOOSpLU' },
+    { title: 'The Tim Ferriss Show', author: 'Tim Ferriss', type: 'podcast', year: 2014, url: 'https://open.spotify.com/show/5qSUyCrk9KR69lEiXbjwXM' },
   ],
 
   'Money': [
@@ -73,6 +81,8 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'The Total Money Makeover', author: 'Dave Ramsey', type: 'book', year: 2003 },
     { title: 'The Automatic Millionaire', author: 'David Bach', type: 'book', year: 2003 },
     { title: 'Thinking in Bets', author: 'Annie Duke', type: 'book', year: 2018 },
+    { title: 'Planet Money', author: 'NPR', type: 'podcast', year: 2008, url: 'https://open.spotify.com/show/4FYpq3lSeQMAhqNI81O0Cn' },
+    { title: 'How to Make Wealth', author: 'Paul Graham', type: 'article', year: 2004, url: 'https://paulgraham.com/wealth.html' },
   ],
 
   'Relationships': [
@@ -96,6 +106,10 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'Captivate', author: 'Vanessa Van Edwards', type: 'book', year: 2017 },
     { title: 'The Course of Love', author: 'Alain de Botton', type: 'book', year: 2016 },
     { title: 'The Like Switch', author: 'Jack Schafer', type: 'book', year: 2015 },
+    { title: 'The Power of Vulnerability', author: 'Brené Brown', type: 'talk', year: 2010, url: 'https://www.youtube.com/watch?v=iCvmsMzlF7o' },
+    { title: 'The Secret to Desire in a Long-term Relationship', author: 'Esther Perel', type: 'talk', year: 2013, url: 'https://www.youtube.com/watch?v=sa0RUmGTCYY' },
+    { title: 'What Makes a Good Life? Lessons from the Longest Study on Happiness', author: 'Robert Waldinger', type: 'talk', year: 2015, url: 'https://www.youtube.com/watch?v=8KkKuTCFvzI' },
+    { title: 'Where Should We Begin?', author: 'Esther Perel', type: 'podcast', year: 2017, url: 'https://open.spotify.com/show/2WpeLETy4lIlLafeRgMJSg' },
   ],
 
   'Big Ideas': [
@@ -119,6 +133,10 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'The Tao Te Ching', author: 'Laozi', type: 'book', year: -400 },
     { title: 'Simulacra and Simulation', author: 'Jean Baudrillard', type: 'book', year: 1981 },
     { title: 'A Brief History of Time', author: 'Stephen Hawking', type: 'book', year: 1988 },
+    { title: 'The Danger of a Single Story', author: 'Chimamanda Ngozi Adichie', type: 'talk', year: 2009, url: 'https://www.youtube.com/watch?v=D9Ihs241zeg' },
+    { title: 'Do Schools Kill Creativity?', author: 'Ken Robinson', type: 'talk', year: 2006, url: 'https://www.youtube.com/watch?v=iG9CE55wbtY' },
+    { title: 'This Is Water', author: 'David Foster Wallace', type: 'article', year: 2005, url: 'https://fs.blog/david-foster-wallace-this-is-water/' },
+    { title: 'Revisionist History', author: 'Malcolm Gladwell', type: 'podcast', year: 2016, url: 'https://open.spotify.com/show/5t7reWCp2TvXRVpkIYjaBK' },
   ],
 
   'How the World Works': [
@@ -142,6 +160,10 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'The Looming Tower', author: 'Lawrence Wright', type: 'book', year: 2006 },
     { title: 'The Road to Serfdom', author: 'Friedrich Hayek', type: 'book', year: 1944 },
     { title: 'Capital in the Twenty-First Century', author: 'Thomas Piketty', type: 'book', year: 2013 },
+    { title: 'The Best Stats You\'ve Ever Seen', author: 'Hans Rosling', type: 'talk', year: 2006, url: 'https://www.youtube.com/watch?v=hVimVzgtD6w' },
+    { title: 'Hardcore History', author: 'Dan Carlin', type: 'podcast', year: 2006, url: 'https://open.spotify.com/show/72qiPaoDRf8HkGKEChvG5q' },
+    { title: 'Freakonomics Radio', author: 'Stephen Dubner', type: 'podcast', year: 2010, url: 'https://open.spotify.com/show/6z4NLXyHPga1UmSJsPK7G1' },
+    { title: 'The Case for Reparations', author: 'Ta-Nehisi Coates', type: 'article', year: 2014, url: 'https://www.theatlantic.com/magazine/archive/2014/06/the-case-for-reparations/361631/' },
   ],
 
   'Science': [
@@ -165,6 +187,9 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'The Hidden Life of Trees', author: 'Peter Wohlleben', type: 'book', year: 2015 },
     { title: 'What Is Life?', author: 'Erwin Schrödinger', type: 'book', year: 1944 },
     { title: 'The Structure of Scientific Revolutions', author: 'Thomas Kuhn', type: 'book', year: 1962 },
+    { title: 'Your Brain Hallucinates Your Conscious Reality', author: 'Anil Seth', type: 'talk', year: 2017, url: 'https://www.youtube.com/watch?v=lyu7v7nWzfo' },
+    { title: 'Radiolab', author: 'Jad Abumrad', type: 'podcast', year: 2002, url: 'https://open.spotify.com/show/2hmkzUtix0qTqvUSxCCRMd' },
+    { title: 'The Uninhabitable Earth', author: 'David Wallace-Wells', type: 'article', year: 2017, url: 'https://nymag.com/intelligencer/2017/07/climate-change-earth-too-hot-for-humans.html' },
   ],
 
   'Cooking': [
@@ -188,6 +213,7 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'The End of Overeating', author: 'David Kessler', type: 'book', year: 2009 },
     { title: 'The French Laundry Cookbook', author: 'Thomas Keller', type: 'book', year: 1999 },
     { title: 'Nose to Tail Eating', author: 'Fergus Henderson', type: 'book', year: 1999 },
+    { title: 'Gastropod', author: 'Nicola Twilley & Cynthia Graber', type: 'podcast', year: 2014, url: 'https://open.spotify.com/show/3Ex1KvAaFq4VhOlvIBUUPK' },
   ],
 
   'Leisure': [
@@ -211,6 +237,9 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'Walden', author: 'Henry David Thoreau', type: 'book', year: 1854 },
     { title: 'Save the Cat!', author: 'Blake Snyder', type: 'book', year: 2005 },
     { title: 'Blue Highways', author: 'William Least Heat-Moon', type: 'book', year: 1982 },
+    { title: 'Your Elusive Creative Genius', author: 'Elizabeth Gilbert', type: 'talk', year: 2009, url: 'https://www.youtube.com/watch?v=86x-u-tz0MA' },
+    { title: '99% Invisible', author: 'Roman Mars', type: 'podcast', year: 2010, url: 'https://open.spotify.com/show/2VRS1IJCTn2Nlkg33ZVfkM' },
+    { title: 'Why I Write', author: 'George Orwell', type: 'article', year: 1946, url: 'https://www.orwell.ru/library/essays/wiw/english/e_wiw' },
   ],
 
   'Technology': [
@@ -234,6 +263,9 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'Prediction Machines', author: 'Ajay Agrawal', type: 'book', year: 2018 },
     { title: 'Ghost in the Wires', author: 'Kevin Mitnick', type: 'book', year: 2011 },
     { title: 'The Facebook Effect', author: 'David Kirkpatrick', type: 'book', year: 2010 },
+    { title: 'How a Handful of Tech Companies Control Billions of Minds', author: 'Tristan Harris', type: 'talk', year: 2017, url: 'https://www.youtube.com/watch?v=C74amJptB4I' },
+    { title: 'Lex Fridman Podcast', author: 'Lex Fridman', type: 'podcast', year: 2018, url: 'https://open.spotify.com/show/2MAi0BvDc6GTFvKFPXnkCL' },
+    { title: 'Hackers and Painters', author: 'Paul Graham', type: 'article', year: 2003, url: 'https://paulgraham.com/hp.html' },
   ],
 
   'Career': [
@@ -257,6 +289,10 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'The 4-Hour Workweek', author: 'Tim Ferriss', type: 'book', year: 2007 },
     { title: 'Thinking in Bets', author: 'Annie Duke', type: 'book', year: 2018 },
     { title: 'The $100 Startup', author: 'Chris Guillebeau', type: 'book', year: 2012 },
+    { title: 'How Great Leaders Inspire Action', author: 'Simon Sinek', type: 'talk', year: 2009, url: 'https://www.youtube.com/watch?v=u4ZoJKF_VuA' },
+    { title: 'The Puzzle of Motivation', author: 'Dan Pink', type: 'talk', year: 2009, url: 'https://www.youtube.com/watch?v=rrkrvAUbU9Y' },
+    { title: 'How I Built This', author: 'Guy Raz', type: 'podcast', year: 2016, url: 'https://open.spotify.com/show/6E709HRH7XaiZrMfgtNCun' },
+    { title: 'How to Do Great Work', author: 'Paul Graham', type: 'article', year: 2023, url: 'https://paulgraham.com/greatwork.html' },
   ],
 
   'Psychology': [
@@ -280,5 +316,10 @@ export const CONTENT_LIBRARY: Record<string, Work[]> = {
     { title: 'Lost Connections', author: 'Johann Hari', type: 'book', year: 2018 },
     { title: 'The Power of Now', author: 'Eckhart Tolle', type: 'book', year: 1997 },
     { title: 'When Nietzsche Wept', author: 'Irvin D. Yalom', type: 'book', year: 1992 },
+    { title: 'Are We in Control of Our Own Decisions?', author: 'Dan Ariely', type: 'talk', year: 2008, url: 'https://www.youtube.com/watch?v=9X68dm92HVI' },
+    { title: 'The Power of Introverts', author: 'Susan Cain', type: 'talk', year: 2012, url: 'https://www.youtube.com/watch?v=c0KYU2j0TM4' },
+    { title: 'Flow, the Secret to Happiness', author: 'Mihaly Csikszentmihalyi', type: 'talk', year: 2004, url: 'https://www.youtube.com/watch?v=fXIeFJCqsPs' },
+    { title: 'Your Body Language May Shape Who You Are', author: 'Amy Cuddy', type: 'talk', year: 2012, url: 'https://www.youtube.com/watch?v=Ks-_Mh1QhMc' },
+    { title: 'Hidden Brain', author: 'Shankar Vedantam', type: 'podcast', year: 2015, url: 'https://open.spotify.com/show/20Gf4IAauFrfj7RBkjcWxh' },
   ],
 }

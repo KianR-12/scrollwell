@@ -1,7 +1,20 @@
 import { useState, useEffect, useRef } from 'react'
-import { IconX } from '@tabler/icons-react'
+import { IconX, IconMicrophone, IconFileText } from '@tabler/icons-react'
 import { generateDeepDive, type DeepDiveSection } from '../api'
 import type { CardData } from '../useCards'
+
+function youTubeId(url: string | undefined): string | null {
+  if (!url) return null
+  const m = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/) || url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/)
+  return m?.[1] ?? null
+}
+
+const SECTION_LABEL: Record<string, string> = {
+  talk: 'Segment',
+  podcast: 'Theme',
+  article: 'Section',
+  book: 'Chapter',
+}
 
 interface Props {
   card: CardData
@@ -189,7 +202,12 @@ interface ChapterCardProps {
 
 function ChapterCard({ section, chapterNum, card }: ChapterCardProps) {
   const [imgFailed, setImgFailed] = useState(false)
+  const [thumbFailed, setThumbFailed] = useState(false)
+  const workType = card.book.type ?? 'book'
   const coverUrl = `https://covers.openlibrary.org/b/isbn/${card.book.isbn}-M.jpg`
+  const videoId = workType === 'talk' ? youTubeId(card.book.url) : null
+  const thumbUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null
+  const sectionLabel = SECTION_LABEL[workType] ?? 'Chapter'
 
   return (
     <div style={{
@@ -200,30 +218,54 @@ function ChapterCard({ section, chapterNum, card }: ChapterCardProps) {
       overflow: 'hidden',
     }}>
 
-      {/* Source row: thumbnail + chapter label */}
+      {/* Source row: thumbnail + section label */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 20, flexShrink: 0 }}>
-        <div style={{
-          flexShrink: 0,
-          width: 36,
-          height: 50,
-          borderRadius: 2,
-          overflow: 'hidden',
-          background: '#E8E4DC',
-          boxShadow: '1px 1px 5px rgba(0,0,0,0.15)',
-        }}>
-          {!imgFailed && (
-            <img
-              src={coverUrl}
-              alt=""
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              onError={() => setImgFailed(true)}
-            />
-          )}
-        </div>
+
+        {workType === 'talk' && (
+          <div style={{
+            flexShrink: 0,
+            width: 63,
+            height: 36,
+            borderRadius: 2,
+            overflow: 'hidden',
+            background: '#111',
+            boxShadow: '1px 1px 5px rgba(0,0,0,0.2)',
+            position: 'relative',
+          }}>
+            {!thumbFailed && thumbUrl && (
+              <img src={thumbUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={() => setThumbFailed(true)} />
+            )}
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+              <div style={{ width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 0, height: 0, borderStyle: 'solid', borderWidth: '3.5px 0 3.5px 6px', borderColor: 'transparent transparent transparent #fff', marginLeft: 1.5 }} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {workType === 'podcast' && (
+          <div style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 2, background: '#F0EBE0', boxShadow: '1px 1px 5px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <IconMicrophone size={16} stroke={1.5} color="#888" />
+          </div>
+        )}
+
+        {workType === 'article' && (
+          <div style={{ flexShrink: 0, width: 36, height: 50, borderRadius: 2, background: '#EBF0F5', boxShadow: '1px 1px 5px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <IconFileText size={16} stroke={1.5} color="#888" />
+          </div>
+        )}
+
+        {workType === 'book' && (
+          <div style={{ flexShrink: 0, width: 36, height: 50, borderRadius: 2, overflow: 'hidden', background: '#E8E4DC', boxShadow: '1px 1px 5px rgba(0,0,0,0.15)' }}>
+            {!imgFailed && (
+              <img src={coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={() => setImgFailed(true)} />
+            )}
+          </div>
+        )}
 
         <div style={{ paddingTop: 5 }}>
           <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase', color: '#ccc', marginBottom: 4 }}>
-            Chapter {chapterNum}
+            {sectionLabel} {chapterNum}
           </div>
           <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.9px', textTransform: 'uppercase', color: '#888', lineHeight: 1.3 }}>
             {section.title}
@@ -300,16 +342,43 @@ function ChapterCard({ section, chapterNum, card }: ChapterCardProps) {
 
 function CardSkeleton({ card }: { card: CardData }) {
   const [imgFailed, setImgFailed] = useState(false)
+  const [thumbFailed, setThumbFailed] = useState(false)
+  const workType = card.book.type ?? 'book'
   const coverUrl = `https://covers.openlibrary.org/b/isbn/${card.book.isbn}-M.jpg`
+  const videoId = workType === 'talk' ? youTubeId(card.book.url) : null
+  const thumbUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null
 
   return (
     <div style={{ padding: '20px 20px 0', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 20 }}>
-        <div style={{ width: 36, height: 50, borderRadius: 2, overflow: 'hidden', background: '#E8E4DC', flexShrink: 0, boxShadow: '1px 1px 5px rgba(0,0,0,0.15)' }}>
-          {!imgFailed && (
-            <img src={coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={() => setImgFailed(true)} />
-          )}
-        </div>
+
+        {workType === 'talk' && (
+          <div style={{ width: 63, height: 36, borderRadius: 2, overflow: 'hidden', background: '#111', flexShrink: 0, boxShadow: '1px 1px 5px rgba(0,0,0,0.2)', position: 'relative' }}>
+            {!thumbFailed && thumbUrl && (
+              <img src={thumbUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={() => setThumbFailed(true)} />
+            )}
+          </div>
+        )}
+
+        {workType === 'podcast' && (
+          <div style={{ width: 36, height: 36, borderRadius: 2, background: '#F0EBE0', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <IconMicrophone size={16} stroke={1.5} color="#aaa" />
+          </div>
+        )}
+
+        {workType === 'article' && (
+          <div style={{ width: 36, height: 50, borderRadius: 2, background: '#EBF0F5', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <IconFileText size={16} stroke={1.5} color="#aaa" />
+          </div>
+        )}
+
+        {workType === 'book' && (
+          <div style={{ width: 36, height: 50, borderRadius: 2, overflow: 'hidden', background: '#E8E4DC', flexShrink: 0, boxShadow: '1px 1px 5px rgba(0,0,0,0.15)' }}>
+            {!imgFailed && (
+              <img src={coverUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={() => setImgFailed(true)} />
+            )}
+          </div>
+        )}
         <div style={{ paddingTop: 5 }}>
           <div style={{ height: 8, width: 55, background: '#F0ECE4', borderRadius: 2, marginBottom: 6 }} className="animate-pulse" />
           <div style={{ height: 9, width: 110, background: '#E8E4DC', borderRadius: 2 }} className="animate-pulse" />

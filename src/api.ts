@@ -61,46 +61,64 @@ Rules:
 - No emojis anywhere
 - Return only valid JSON — nothing before or after the array`
 
-const DEEP_DIVE_PROMPT = `You break books, articles, and talks into their most important parts for a mobile reading app called scrollwell.
+const TYPE_FRAMING: Record<string, string> = {
+  talk: 'TED talk',
+  podcast: 'podcast show',
+  article: 'essay or article',
+  book: 'book',
+}
+
+const DEEP_DIVE_PROMPT = `You break books, articles, talks, and podcasts into their most important parts for a mobile reading app called scrollwell.
 
 Read the work and decide how many cards it actually needs to cover it properly. Cover everything that matters, skip nothing important, and don't pad with filler cards just to hit a number. The count should come from the content, not a rule.
 
-Each card must fully explain its point. Never tease or say "the author explores" or "you'll discover" or "this section reveals". Just explain it directly and completely. The reader should finish each card actually understanding the idea, not feeling like they need to read the original to get the answer. Write like a brilliant friend who read the book and is explaining it to you over dinner — specific, honest, complete.
+For a book: sections are chapters or major ideas.
+For a talk: sections are the key arguments or moments in the talk — typically 4–8. Think of it as the talk's architecture: opening claim, evidence, complication, resolution.
+For a podcast show: sections are the show's central recurring themes or ideas — what it returns to across episodes.
+For an article or essay: sections are the key claims or turns in the argument — follow the essay's own logic.
 
-For each section, think carefully about what that specific chapter concept is actually about — then ask whether something specific is happening in 2026 that directly connects to it. If a chapter is about environment design, find a real 2026 story about environment design. If it's about identity, find something about identity. The connection must be real, not forced. If no genuine current event connects to this specific chapter concept, use an empty string for relevance.
+Each card must fully explain its point. Never tease or say "the author explores" or "you'll discover" or "this section reveals". Just explain it directly and completely. The reader should finish each card actually understanding the idea. Write like a brilliant friend who just watched the talk or read the essay explaining it to you over dinner — specific, honest, complete.
+
+For each section, think carefully about what that specific concept is actually about — then ask whether something specific is happening in 2026 that directly connects to it. The connection must be real, not forced. If no genuine current event connects, use an empty string for relevance.
 
 Return a JSON object — no markdown, no explanation:
 {
   "description": "One sentence. What this work is fundamentally about and why it matters.",
   "sections": [
     {
-      "title": "2–4 word label for this chapter or idea, in title case",
+      "title": "2–4 word label for this part, in title case",
       "hook": "A punchy, counterintuitive statement in double quotes — the core insight of this part.",
-      "gist": "3–4 sentences explaining this idea directly and completely. Concrete, no fluff. Write for someone who hasn't read the work.",
+      "gist": "3–4 sentences explaining this idea directly and completely. Concrete, no fluff. Write for someone who hasn't seen or read the work.",
       "howToTalk": "One sentence written like you'd text a friend — 'next time [X] comes up just mention [Y]'. Casual, specific, never instructional. Reads like insider knowledge, not advice.",
-      "relevance": "One sentence under 20 words connecting THIS chapter's specific concept to something real happening in 2026. Must be a genuine, direct connection — not a stretch. Empty string if no real connection exists."
+      "relevance": "One sentence under 20 words connecting THIS section's specific concept to something real happening in 2026. Must be a genuine, direct connection — not a stretch. Empty string if no real connection exists."
     }
   ]
 }
 
 Rules:
-- title is 2–4 words in title case, naming this idea or chapter
+- title is 2–4 words in title case, naming this idea or part
 - hook is always wrapped in double-quote characters as part of the string value
 - howToTalk is one casual sentence — reads like a friend texting you, never instructional, never starts with 'Bring this up'
 - gist has no bullet points, no em-dashes, no headers
-- relevance is per-section, specific to that chapter's concept, under 20 words — or empty string ""
+- relevance is per-section, under 20 words — or empty string ""
 - Never write a vague relevance like "this is more relevant than ever" — name the actual thing or leave it blank
 - No emojis anywhere
 - Return only valid JSON`
 
 const WORKS_PROMPT = `You generate cards for a mobile reading app. For each specific work listed, write one card surfacing its single sharpest, most surprising insight — written like something worth dropping at dinner.
 
+The works may be books, TED talks, podcast shows, or essays/articles. Adjust accordingly:
+- For a book: write as if explaining what you got from reading it
+- For a TED talk: write as if explaining the talk's central provocation — the one thing the speaker wants you to believe differently after watching
+- For a podcast show: write as if explaining what makes this show worth listening to — its defining insight or the question it keeps returning to
+- For an essay or article: write as if explaining the essay's argument — the thing it convinced you of
+
 Return a JSON array with exactly one object per work, in the same order they were listed:
 [
   {
     "hook": "A single punchy, counterintuitive sentence in double quotes. A provocation, not a summary.",
     "hookSub": "A 6–10 word lowercase subtitle naming what the hook is really about.",
-    "gist": "3–4 plain sentences backing the hook up. Concrete, no fluff. Write for someone smart who hasn't read the work.",
+    "gist": "3–4 plain sentences backing the hook up. Concrete, no fluff. Write for someone smart who hasn't encountered this work.",
     "socialCount": 1234,
     "book": {
       "title": "Exact title as provided",
@@ -119,7 +137,8 @@ Rules:
 - hookSub is lowercase, no period at the end
 - gist has no bullet points, no headers, no em-dashes
 - socialCount is a realistic integer between 900 and 4800
-- isbn must be a real valid ISBN-13 for this specific work (used to load a cover image); for talks or articles use "0000000000000"
+- isbn: for books use a real valid ISBN-13; for talks, podcasts, or articles use "0000000000000"
+- For talks: pages = the talk duration in minutes (e.g. 14). For podcasts: pages = 0. For articles: pages = estimated reading time in minutes
 - book.category must exactly match the provided category name
 - No emojis anywhere
 - Return only valid JSON — nothing before or after the array`
@@ -211,6 +230,7 @@ async function saveDeepDiveToDb(title: string, creator: string, data: DeepDiveDa
     hook: s.hook,
     gist: s.gist,
     conversation_tip: s.howToTalk,
+    chapter_relevance: s.relevance ?? null,
     parent_description: data.description,
   }))
   await supabase
@@ -237,13 +257,15 @@ export async function generateDeepDive(card: CardData): Promise<DeepDiveData> {
 
   // Tier 3: Anthropic API
   const client = getClient()
+  const workType = card.book.type ?? 'book'
+  const typeLabel = TYPE_FRAMING[workType] ?? 'book'
   const msg = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
+    max_tokens: 8192,
     system: DEEP_DIVE_PROMPT,
     messages: [{
       role: 'user',
-      content: `Title: "${title}"\nCreator: ${author}\nType: Book\nYear: ${year}\nCategory: ${category}\n\nBreak this work into the right number of cards based on its length and complexity.`,
+      content: `Title: "${title}"\nCreator: ${author}\nType: ${typeLabel}\nYear: ${year}\nCategory: ${category}\n\nBreak this ${typeLabel} into the right number of sections based on its content.`,
     }],
   })
 
@@ -345,7 +367,8 @@ export async function generateCardsForWorks(works: Work[], categoryName: string)
     if (!work) return
     const card: CardData = {
       hook: c.hook, hookSub: c.hookSub, gist: c.gist,
-      socialCount: c.socialCount, book: c.book,
+      socialCount: c.socialCount,
+      book: { ...c.book, type: work.type, url: work.url },
     }
     workCardCache.set(`${work.title}::${work.author}`, card)
     result[afterDbIdx[i]] = card

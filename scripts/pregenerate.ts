@@ -12,207 +12,136 @@ const supabase = createClient(
 
 // ── Prompts ────────────────────────────────────────────────────────────────────
 
-const WORKS_PROMPT = `You generate cards for a mobile reading app. For each specific work listed, write one card surfacing its single sharpest, most surprising insight — written like something worth dropping at dinner.
-
-Return a JSON array with exactly one object per work, in the same order they were listed:
-[
-  {
-    "hook": "A single punchy, counterintuitive sentence in double quotes. A provocation, not a summary.",
-    "hookSub": "A 6–10 word lowercase subtitle naming what the hook is really about.",
-    "gist": "3–4 plain sentences backing the hook up. Concrete, no fluff. Write for someone smart who hasn't read the work.",
-    "socialCount": 1234,
-    "book": {
-      "title": "Exact title as provided",
-      "author": "Exact author as provided",
-      "year": 2020,
-      "pages": 300,
-      "isbn": "9781234567890",
-      "category": "category name here"
-    }
-  }
-]
-
-Rules:
-- Use the exact title and author from the provided list — do not alter them
-- hook is always wrapped in double-quote characters as part of the string value
-- hookSub is lowercase, no period at the end
-- gist has no bullet points, no headers, no em-dashes
-- socialCount is a realistic integer between 900 and 4800
-- isbn must be a real valid ISBN-13 for this specific work (used to load a cover image); for talks or articles use "0000000000000"
-- book.category must exactly match the provided category name
-- No emojis anywhere
-- Return only valid JSON — nothing before or after the array`
-
-const DEEP_DIVE_PROMPT = `You break books, articles, and talks into their most important parts for a mobile reading app called scrollwell.
+const DEEP_DIVE_PROMPT = `You break books, articles, talks, and podcasts into their most important parts for a mobile reading app called scrollwell.
 
 Read the work and decide how many cards it actually needs to cover it properly. Cover everything that matters, skip nothing important, and don't pad with filler cards just to hit a number. The count should come from the content, not a rule.
 
-Each card must fully explain its point. Never tease or say "the author explores" or "you'll discover" or "this section reveals". Just explain it directly and completely. The reader should finish each card actually understanding the idea, not feeling like they need to read the original to get the answer. Write like a brilliant friend who read the book and is explaining it to you over dinner — specific, honest, complete.
+For a book: sections are chapters or major ideas.
+For a talk: sections are the key arguments or moments in the talk — typically 4–8. Think of it as the talk's architecture: opening claim, evidence, complication, resolution.
+For a podcast show: sections are the show's central recurring themes or ideas — what it returns to across episodes.
+For an article or essay: sections are the key claims or turns in the argument — follow the essay's own logic.
+
+Each card must fully explain its point. Never tease or say "the author explores" or "you'll discover" or "this section reveals". Just explain it directly and completely. The reader should finish each card actually understanding the idea. Write like a brilliant friend who just watched the talk or read the essay explaining it to you over dinner — specific, honest, complete.
+
+For each section, think carefully about what that specific concept is actually about — then ask whether something specific is happening in 2026 that directly connects to it. The connection must be real, not forced. If no genuine current event connects, use an empty string for relevance.
 
 Return a JSON object — no markdown, no explanation:
 {
   "description": "One sentence. What this work is fundamentally about and why it matters.",
   "sections": [
     {
-      "title": "2–4 word label for this chapter or idea, in title case",
+      "title": "2–4 word label for this part, in title case",
       "hook": "A punchy, counterintuitive statement in double quotes — the core insight of this part.",
-      "gist": "3–4 sentences explaining this idea directly and completely. Concrete, no fluff. Write for someone who hasn't read the work.",
-      "howToTalk": "1–2 sentences that start exactly with 'Bring this up when' — a natural way to use this insight in conversation."
+      "gist": "3–4 sentences explaining this idea directly and completely. Concrete, no fluff. Write for someone who hasn't seen or read the work.",
+      "howToTalk": "One sentence written like you'd text a friend — 'next time [X] comes up just mention [Y]'. Casual, specific, never instructional. Reads like insider knowledge, not advice.",
+      "relevance": "One sentence under 20 words connecting THIS section's specific concept to something real happening in 2026. Must be a genuine, direct connection — not a stretch. Empty string if no real connection exists."
     }
   ]
 }
 
 Rules:
-- title is 2–4 words in title case, naming this idea or chapter
+- title is 2–4 words in title case, naming this idea or part
 - hook is always wrapped in double-quote characters as part of the string value
-- howToTalk must start with the exact words 'Bring this up when'
+- howToTalk is one casual sentence — reads like a friend texting you, never instructional, never starts with 'Bring this up'
 - gist has no bullet points, no em-dashes, no headers
+- relevance is per-section, under 20 words — or empty string ""
+- Never write a vague relevance like "this is more relevant than ever" — name the actual thing or leave it blank
 - No emojis anywhere
 - Return only valid JSON`
 
-// ── Helpers ────────────────────────────────────────────────────────────────────
+const TYPE_FRAMING: Record<string, string> = {
+  talk: 'TED talk',
+  podcast: 'podcast show',
+  article: 'essay or article',
+  book: 'book',
+}
 
-const BATCH = 5
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-async function generateCardBatch(works: Work[], category: string) {
-  const workList = works
-    .map((w, i) => `${i + 1}. "${w.title}" by ${w.author} (${w.type}, ${w.year})`)
-    .join('\n')
-
-  const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2048,
-    system: WORKS_PROMPT,
-    messages: [{ role: 'user', content: `Category: "${category}"\nGenerate cards for these works:\n${workList}` }],
-  })
-
-  const text = (msg.content[0].type === 'text' ? msg.content[0].text : '')
+function extractText(content: any[]): string {
+  return content
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text as string)
+    .join('')
     .replace(/```json/g, '').replace(/```/g, '').trim()
-  return JSON.parse(text) as Array<{
-    hook: string; hookSub: string; gist: string; socialCount: number
-    book: { title: string; author: string; year: number; pages: number; isbn: string; category: string }
-  }>
 }
 
 async function generateDeepDive(work: Work, category: string) {
+  const typeLabel = TYPE_FRAMING[work.type] ?? 'book'
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 4096,
+    max_tokens: 8192,
     system: DEEP_DIVE_PROMPT,
     messages: [{
       role: 'user',
-      content: `Title: "${work.title}"\nCreator: ${work.author}\nType: ${work.type}\nYear: ${work.year}\nCategory: ${category}\n\nBreak this work into the right number of cards based on its length and complexity.`,
+      content: `Title: "${work.title}"\nCreator: ${work.author}\nType: ${typeLabel}\nYear: ${work.year}\nCategory: ${category}\n\nBreak this ${typeLabel} into the right number of sections based on its content.`,
     }],
   })
 
-  const text = (msg.content[0].type === 'text' ? msg.content[0].text : '')
-    .replace(/```json/g, '').replace(/```/g, '').trim()
+  const text = extractText(msg.content as any[])
   return JSON.parse(text) as {
     description: string
-    sections: Array<{ title: string; hook: string; gist: string; howToTalk: string }>
+    sections: Array<{ title: string; hook: string; gist: string; howToTalk: string; relevance?: string }>
   }
 }
 
-// ── Pass 1: card summaries ─────────────────────────────────────────────────────
+// ── Deduplication ──────────────────────────────────────────────────────────────
 
-async function runPass1() {
-  const categories = Object.entries(CONTENT_LIBRARY)
-  let generated = 0, skipped = 0, errors = 0
-
-  console.log('━━━ Pass 1: card summaries ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
-
-  for (const [category, works] of categories) {
-    console.log(`▸ ${category}`)
-
-    for (let i = 0; i < works.length; i += BATCH) {
-      const batch = works.slice(i, i + BATCH)
-      const label = `  [${i + 1}–${i + batch.length}]`
-
-      const { data: existing } = await supabase
-        .from('cards')
-        .select('title, creator')
-        .in('title', batch.map(w => w.title))
-
-      const existingSet = new Set((existing ?? []).map((r: any) => `${r.title}::${r.creator}`))
-      const toGenerate = batch.filter(w => !existingSet.has(`${w.title}::${w.author}`))
-      const skippedCount = batch.length - toGenerate.length
-      skipped += skippedCount
-
-      if (toGenerate.length === 0) {
-        console.log(`${label} all cached`)
-        continue
+function deduplicateWorks(): Array<{ work: Work; category: string }> {
+  const seen = new Set<string>()
+  const result: Array<{ work: Work; category: string }> = []
+  for (const [category, works] of Object.entries(CONTENT_LIBRARY)) {
+    for (const work of works) {
+      const key = `${work.title}::${work.author}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        result.push({ work, category })
       }
-
-      console.log(`${label} generating ${toGenerate.length}${skippedCount ? ` (${skippedCount} cached)` : ''}…`)
-
-      try {
-        const cards = await generateCardBatch(toGenerate, category)
-        const rows = cards.map((c, idx) => ({
-          title: c.book.title,
-          creator: c.book.author,
-          type: toGenerate[idx]?.type ?? 'book',
-          category: c.book.category,
-          hook: c.hook,
-          hook_sub: c.hookSub,
-          gist: c.gist,
-          conversation_tip: null,
-          cover_url: `https://covers.openlibrary.org/b/isbn/${c.book.isbn}-M.jpg`,
-          isbn: c.book.isbn,
-          year: c.book.year,
-          pages: c.book.pages,
-          social_count: c.socialCount,
-        }))
-
-        const { error } = await supabase.from('cards').upsert(rows, { onConflict: 'title,creator' })
-        if (error) { console.error(`${label} DB error: ${error.message}`); errors += toGenerate.length }
-        else { console.log(`${label} ✓ saved ${toGenerate.length}`); generated += toGenerate.length }
-      } catch (err) {
-        console.error(`${label} error:`, err instanceof Error ? err.message : err)
-        errors += toGenerate.length
-      }
-
-      if (i + BATCH < works.length) await sleep(600)
     }
-    console.log()
   }
-
-  console.log(`Pass 1 done — generated=${generated} skipped=${skipped} errors=${errors}\n`)
+  return result
 }
 
-// ── Pass 2: deep dive chapters ─────────────────────────────────────────────────
+// ── Main ───────────────────────────────────────────────────────────────────────
 
-async function runPass2() {
-  const categories = Object.entries(CONTENT_LIBRARY)
-  const allWorks: Array<{ work: Work; category: string }> = []
-  for (const [category, works] of categories) {
-    for (const work of works) allWorks.push({ work, category })
-  }
+async function run() {
+  const allWorks = deduplicateWorks()
+  const total = allWorks.length
+  console.log(`\nScrollwell pregenerate — ${total} unique works across 12 categories\n`)
 
   let generated = 0, skipped = 0, errors = 0
-  console.log(`━━━ Pass 2: deep dive chapters (${allWorks.length} works) ━━━━━━━━━━━━━━━\n`)
 
   for (let i = 0; i < allWorks.length; i++) {
     const { work, category } = allWorks[i]
-    const label = `  [${i + 1}/${allWorks.length}] ${work.title}`
+    const label = `[${i + 1}/${total}] ${work.title}`
 
-    // Check if deep dive already exists for this work
-    const { count } = await supabase
+    // Check existing entries and whether they're stale (old "Bring this up" format)
+    const { data: existing } = await supabase
       .from('deep_dive_cards')
-      .select('id', { count: 'exact', head: true })
+      .select('conversation_tip')
       .eq('parent_title', work.title)
       .eq('parent_creator', work.author)
 
-    if (count && count > 0) {
-      console.log(`${label} — skipped`)
+    const hasRows = existing && existing.length > 0
+    const isStale = hasRows && (existing as any[]).some(
+      (r: any) => r.conversation_tip && (r.conversation_tip as string).startsWith('Bring this up')
+    )
+
+    if (hasRows && !isStale) {
+      console.log(`${label} — ⏭ skip`)
       skipped++
       continue
     }
 
-    console.log(`${label} — generating…`)
+    if (isStale) {
+      console.log(`${label} — stale format, regenerating…`)
+    } else {
+      console.log(`${label} — generating…`)
+    }
 
     try {
       const data = await generateDeepDive(work, category)
@@ -225,6 +154,7 @@ async function runPass2() {
         hook: s.hook,
         gist: s.gist,
         conversation_tip: s.howToTalk,
+        chapter_relevance: s.relevance ?? null,
         parent_description: data.description,
       }))
 
@@ -236,7 +166,7 @@ async function runPass2() {
         console.error(`${label} — DB error: ${error.message}`)
         errors++
       } else {
-        console.log(`${label} — ✓ ${data.sections.length} chapters`)
+        console.log(`${label} — ✓ ${data.sections.length} sections saved`)
         generated++
       }
     } catch (err) {
@@ -244,22 +174,10 @@ async function runPass2() {
       errors++
     }
 
-    await sleep(800)
+    await sleep(900)
   }
 
-  console.log(`\nPass 2 done — generated=${generated} skipped=${skipped} errors=${errors}\n`)
-}
-
-// ── Run ────────────────────────────────────────────────────────────────────────
-
-async function run() {
-  const totalWorks = Object.values(CONTENT_LIBRARY).reduce((n, w) => n + w.length, 0)
-  console.log(`\nScrollwell pregenerate — 12 categories, ${totalWorks} works\n`)
-
-  await runPass1()
-  await runPass2()
-
-  console.log('✅ All done.\n')
+  console.log(`\n✅ Done — generated=${generated} skipped=${skipped} errors=${errors}\n`)
 }
 
 run().catch(err => {

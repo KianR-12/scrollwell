@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { IconArrowLeft, IconSearch, IconX, IconRefresh, IconRotate } from '@tabler/icons-react'
+import { useState, useEffect, useRef } from 'react'
+import { IconArrowLeft, IconSearch, IconX, IconRotate, IconMicrophone, IconFileText } from '@tabler/icons-react'
 import { CardSwipeFeed } from './CardSwipeFeed'
 import { generateCardsForWorks, generateCard } from '../api'
 import { CONTENT_LIBRARY, type Work } from '../contentLibrary'
@@ -25,32 +25,36 @@ const CATEGORIES: Category[] = [
   { title: 'Psychology',          sub: 'behavior, decisions, the human mind'         },
 ]
 
-const BATCH = 5
+// ── Section types ──────────────────────────────────────────────────────────────
 
-// ── Session cursor helpers (survives tab switches since ExploreTab unmounts) ────
+type SectionType = Work['type']
 
-const SESSION_KEY = 'scrollwell:explore:cursors'
+const SECTION_ORDER: SectionType[] = ['book', 'talk', 'podcast', 'article']
 
-function readCursors(): Map<string, number> {
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY)
-    return raw ? new Map(JSON.parse(raw) as [string, number][]) : new Map()
-  } catch { return new Map() }
+const SECTION_LABELS: Record<SectionType, string> = {
+  book: 'Books',
+  talk: 'Talks',
+  podcast: 'Podcasts',
+  article: 'Articles',
 }
 
-function writeCursor(category: string, cursor: number) {
-  try {
-    const m = readCursors()
-    m.set(category, cursor)
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify([...m]))
-  } catch {}
+// ── YouTube helper ─────────────────────────────────────────────────────────────
+
+function youTubeId(url: string | undefined): string | null {
+  if (!url) return null
+  const m = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/) || url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/)
+  return m?.[1] ?? null
 }
 
-function resetCursor(category: string) {
-  writeCursor(category, 0)
-}
+// ── View types ─────────────────────────────────────────────────────────────────
 
-// ────────────────────────────────────────────────────────────────────────────────
+type ExploreView =
+  | { kind: 'grid' }
+  | { kind: 'category'; cat: Category }
+  | { kind: 'feed'; cat: Category; sectionType: SectionType; cards: CardData[]; startIndex: number }
+  | { kind: 'search'; query: string; card: CardData | null; loading: boolean; error: string | null }
+
+// ── ExploreTab ─────────────────────────────────────────────────────────────────
 
 interface ExploreProps {
   onGoDeeper?: (card: CardData) => void
@@ -59,58 +63,8 @@ interface ExploreProps {
   onCardViewed?: (card: CardData) => void
 }
 
-type ExploreView =
-  | { kind: 'grid' }
-  | { kind: 'category'; cat: Category }
-  | { kind: 'search'; query: string; card: CardData | null; loading: boolean; error: string | null }
-
 export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }: ExploreProps) {
   const [view, setView] = useState<ExploreView>({ kind: 'grid' })
-  const [cards, setCards] = useState<CardData[]>([])
-  const [initialLoading, setInitialLoading] = useState(false)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [exhausted, setExhausted] = useState(false)
-
-  const worksRef = useRef<Work[]>([])
-  const nextBatchRef = useRef(0)
-  const isLoadingMore = useRef(false)
-  // Tracks the last card index seen; detects swipe-past-end (goNext clamps + re-fires same index)
-  const prevCardIndexRef = useRef<number>(-1)
-
-  async function openCategory(cat: Category) {
-    const works = CONTENT_LIBRARY[cat.title] ?? []
-    const startIdx = readCursors().get(cat.title) ?? 0
-
-    setView({ kind: 'category', cat })
-    setError(null)
-    setCards([])
-    setExhausted(false)
-    prevCardIndexRef.current = -1
-    worksRef.current = works
-
-    // Already seen every work in this category
-    if (works.length > 0 && startIdx >= works.length) {
-      setExhausted(true)
-      return
-    }
-
-    setInitialLoading(true)
-    nextBatchRef.current = startIdx
-
-    try {
-      const end = Math.min(startIdx + BATCH, works.length)
-      const batch = works.slice(startIdx, end)
-      const result = await generateCardsForWorks(batch, cat.title)
-      setCards(result)
-      nextBatchRef.current = end
-      writeCursor(cat.title, end)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load cards')
-    } finally {
-      setInitialLoading(false)
-    }
-  }
 
   async function handleSearch(query: string) {
     const q = query.trim()
@@ -127,63 +81,13 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
     }
   }
 
-  async function loadMore() {
-    if (isLoadingMore.current || view.kind !== 'category') return
-    const works = worksRef.current
-    const start = nextBatchRef.current
-    if (start >= works.length) return
-
-    isLoadingMore.current = true
-    setLoadingMore(true)
-    try {
-      const end = Math.min(start + BATCH, works.length)
-      const batch = works.slice(start, end)
-      const newCards = await generateCardsForWorks(batch, view.cat.title)
-      setCards(prev => [...prev, ...newCards])
-      nextBatchRef.current = end
-      writeCursor(view.cat.title, end)
-    } catch {
-      // silent
-    } finally {
-      setLoadingMore(false)
-      isLoadingMore.current = false
-    }
-  }
-
-  function onCardIndexChange(i: number) {
-    const loaded = cards.length
-    const total = worksRef.current.length
-
-    // Eagerly load next batch when approaching the end
-    if (i >= loaded - 2 && nextBatchRef.current < total) loadMore()
-
-    // Detect swipe-past-end: CardSwipeFeed clamps at total-1 and re-fires onIndexChange
-    // with the same index — that's the rubber-band moment signaling the user tried to go further
-    if (
-      i === prevCardIndexRef.current &&
-      i === loaded - 1 &&
-      loaded > 0 &&
-      nextBatchRef.current >= total &&
-      !isLoadingMore.current
-    ) {
-      setExhausted(true)
-    }
-    prevCardIndexRef.current = i
+  function openFeed(cat: Category, sectionType: SectionType, cards: CardData[], startIndex: number) {
+    setView({ kind: 'feed', cat, sectionType, cards, startIndex })
   }
 
   function goBack() {
-    setView({ kind: 'grid' })
-    setCards([])
-    setError(null)
-    setExhausted(false)
-    prevCardIndexRef.current = -1
-  }
-
-  function refreshCategory() {
-    if (view.kind !== 'category') return
-    const cat = view.cat
-    resetCursor(cat.title)
-    openCategory(cat)
+    if (view.kind === 'feed') setView({ kind: 'category', cat: view.cat })
+    else setView({ kind: 'grid' })
   }
 
   if (view.kind === 'search') {
@@ -205,18 +109,11 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
 
   if (view.kind === 'category') {
     return (
-      <CategoryFeed
-        category={view.cat}
-        cards={cards}
-        loading={initialLoading}
-        loadingMore={loadingMore}
-        totalWorks={worksRef.current.length}
-        error={error}
-        exhausted={exhausted}
+      <CategoryDetail
+        cat={view.cat}
         onBack={goBack}
-        onRefresh={refreshCategory}
+        onOpenFeed={openFeed}
         onGoDeeper={onGoDeeper}
-        onCardIndexChange={onCardIndexChange}
         savedKeys={savedKeys}
         onToggleSave={onToggleSave}
         onCardViewed={onCardViewed}
@@ -224,10 +121,31 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
     )
   }
 
-  return <CategoryGrid onSelect={openCategory} onSearch={handleSearch} />
+  if (view.kind === 'feed') {
+    return (
+      <FeedView
+        cat={view.cat}
+        sectionType={view.sectionType}
+        cards={view.cards}
+        startIndex={view.startIndex}
+        onBack={goBack}
+        onGoDeeper={onGoDeeper}
+        savedKeys={savedKeys}
+        onToggleSave={onToggleSave}
+        onCardViewed={onCardViewed}
+      />
+    )
+  }
+
+  return (
+    <CategoryGrid
+      onSelect={cat => setView({ kind: 'category', cat })}
+      onSearch={handleSearch}
+    />
+  )
 }
 
-// ── Search result view ─────────────────────────────────────────────────────────
+// ── SearchResultView ───────────────────────────────────────────────────────────
 
 interface SearchResultProps {
   query: string
@@ -245,7 +163,6 @@ interface SearchResultProps {
 function SearchResultView({ query, card, loading, error, onBack, onRetry, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: SearchResultProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-      {/* Header */}
       <div style={{
         padding: '52px 20px 11px',
         borderBottom: '2px solid #111',
@@ -261,31 +178,13 @@ function SearchResultView({ query, card, loading, error, onBack, onRetry, onGoDe
           <IconArrowLeft size={18} stroke={1.8} />
         </button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: '1px',
-            textTransform: 'uppercase',
-            color: '#bbb',
-            fontFamily: 'Inter, sans-serif',
-            marginBottom: 3,
-          }}>
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#bbb', fontFamily: 'Inter, sans-serif', marginBottom: 3 }}>
             Search
           </div>
-          <div style={{
-            fontFamily: '"Playfair Display", serif',
-            fontSize: 18,
-            fontWeight: 700,
-            color: '#111',
-            letterSpacing: '-0.3px',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}>
+          <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 18, fontWeight: 700, color: '#111', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {query}
           </div>
         </div>
-        {/* Regenerate button — forces a fresh API call */}
         <button
           onClick={onRetry}
           disabled={loading}
@@ -303,30 +202,18 @@ function SearchResultView({ query, card, loading, error, onBack, onRetry, onGoDe
             marginBottom: 2,
           }}
         >
-          <IconRotate size={14} stroke={1.8} style={{ transform: loading ? 'none' : undefined }} />
+          <IconRotate size={14} stroke={1.8} />
         </button>
       </div>
 
-      {/* Progress bar */}
       <div style={{ height: 2, background: '#EBEBEB', flexShrink: 0 }}>
-        <div style={{
-          height: '100%',
-          background: '#111',
-          width: loading ? '60%' : '100%',
-          transition: 'width 1.2s ease',
-          opacity: loading ? 1 : 0,
-        }} />
+        <div style={{ height: '100%', background: '#111', width: loading ? '60%' : '100%', transition: 'width 1.2s ease', opacity: loading ? 1 : 0 }} />
       </div>
 
       {error && (
         <div style={{ padding: '28px 20px', flexShrink: 0 }}>
-          <div style={{ fontSize: 13, color: '#888', lineHeight: 1.6, fontFamily: 'Inter, sans-serif', marginBottom: 16 }}>
-            {error}
-          </div>
-          <button
-            onClick={onBack}
-            style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: '#111', background: 'none', border: '1px solid #111', padding: '8px 14px', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
-          >
+          <div style={{ fontSize: 13, color: '#888', lineHeight: 1.6, fontFamily: 'Inter, sans-serif', marginBottom: 16 }}>{error}</div>
+          <button onClick={onBack} style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: '#111', background: 'none', border: '1px solid #111', padding: '8px 14px', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}>
             Go back
           </button>
         </div>
@@ -346,9 +233,12 @@ function SearchResultView({ query, card, loading, error, onBack, onRetry, onGoDe
   )
 }
 
-// ── Grid view ──────────────────────────────────────────────────────────────────
+// ── CategoryGrid ───────────────────────────────────────────────────────────────
 
-function CategoryGrid({ onSelect, onSearch }: { onSelect: (cat: Category) => void; onSearch: (q: string) => void }) {
+function CategoryGrid({ onSelect, onSearch }: {
+  onSelect: (cat: Category) => void
+  onSearch: (q: string) => void
+}) {
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -364,21 +254,12 @@ function CategoryGrid({ onSelect, onSearch }: { onSelect: (cat: Category) => voi
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-
-      {/* Title header */}
       <div style={{ padding: '52px 20px 11px', borderBottom: '2px solid #111', flexShrink: 0 }}>
-        <div style={{
-          fontFamily: '"Playfair Display", serif',
-          fontSize: 22,
-          fontWeight: 700,
-          color: '#111',
-          letterSpacing: '-0.3px',
-        }}>
+        <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: '#111', letterSpacing: '-0.3px' }}>
           Explore
         </div>
       </div>
 
-      {/* Search bar */}
       <div style={{
         padding: '12px 20px',
         borderBottom: '1px solid #E8E4DC',
@@ -425,7 +306,6 @@ function CategoryGrid({ onSelect, onSearch }: { onSelect: (cat: Category) => voi
             </button>
           )}
         </div>
-
         <button
           onClick={submit}
           disabled={!query.trim()}
@@ -450,7 +330,6 @@ function CategoryGrid({ onSelect, onSearch }: { onSelect: (cat: Category) => voi
         </button>
       </div>
 
-      {/* Category grid */}
       <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, padding: '12px 20px 20px' }}>
           {CATEGORIES.map(cat => (
@@ -481,26 +360,292 @@ function CategoryGrid({ onSelect, onSearch }: { onSelect: (cat: Category) => voi
   )
 }
 
-// ── Category feed view ─────────────────────────────────────────────────────────
+// ── CategoryDetail ─────────────────────────────────────────────────────────────
 
-interface FeedProps {
-  category: Category
+interface SectionState {
+  works: Work[]
   cards: CardData[]
   loading: boolean
-  loadingMore: boolean
-  totalWorks: number
   error: string | null
-  exhausted: boolean
+}
+
+interface CategoryDetailProps {
+  cat: Category
   onBack: () => void
-  onRefresh: () => void
+  onOpenFeed: (cat: Category, sectionType: SectionType, cards: CardData[], startIndex: number) => void
   onGoDeeper?: (card: CardData) => void
-  onCardIndexChange: (i: number) => void
   savedKeys?: Set<string>
   onToggleSave?: (card: CardData) => void
   onCardViewed?: (card: CardData) => void
 }
 
-function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error, exhausted, onBack, onRefresh, onGoDeeper, onCardIndexChange, savedKeys, onToggleSave, onCardViewed }: FeedProps) {
+function CategoryDetail({ cat, onBack, onOpenFeed }: CategoryDetailProps) {
+  const allWorks = CONTENT_LIBRARY[cat.title] ?? []
+
+  const [sections, setSections] = useState<Record<SectionType, SectionState>>(() => {
+    const init = {} as Record<SectionType, SectionState>
+    for (const type of SECTION_ORDER) {
+      const works = allWorks.filter(w => w.type === type)
+      init[type] = { works, cards: [], loading: works.length > 0, error: null }
+    }
+    return init
+  })
+
+  useEffect(() => {
+    SECTION_ORDER.forEach(type => {
+      const works = allWorks.filter(w => w.type === type)
+      if (works.length === 0) return
+      generateCardsForWorks(works, cat.title)
+        .then(cards => setSections(prev => ({ ...prev, [type]: { works, cards, loading: false, error: null } })))
+        .catch(err => setSections(prev => ({
+          ...prev,
+          [type]: { ...prev[type], loading: false, error: err instanceof Error ? err.message : 'Failed to load' },
+        })))
+    })
+  }, [])
+
+  const totalWorks = allWorks.length
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+      {/* Header */}
+      <div style={{
+        padding: '52px 20px 11px',
+        borderBottom: '2px solid #111',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+        gap: 12,
+      }}>
+        <button
+          onClick={onBack}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#111', display: 'flex', alignItems: 'center', flexShrink: 0, marginBottom: 2 }}
+        >
+          <IconArrowLeft size={18} stroke={1.8} />
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, fontWeight: 700, color: '#111', letterSpacing: '-0.3px' }}>
+            {cat.title}
+          </div>
+        </div>
+        <div style={{ fontSize: 10, color: '#ccc', fontWeight: 500, flexShrink: 0, marginBottom: 3 }}>
+          {totalWorks} works
+        </div>
+      </div>
+
+      {/* Sections */}
+      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+        {SECTION_ORDER.map(type => {
+          const { works, cards, loading, error } = sections[type]
+          if (!loading && works.length === 0) return null
+          return (
+            <SectionRow
+              key={type}
+              type={type}
+              count={works.length}
+              cards={cards}
+              loading={loading}
+              error={error}
+              onCardTap={i => onOpenFeed(cat, type, cards, i)}
+            />
+          )
+        })}
+        <div style={{ height: 32 }} />
+      </div>
+    </div>
+  )
+}
+
+// ── SectionRow ─────────────────────────────────────────────────────────────────
+
+function SectionRow({ type, count, cards, loading, error, onCardTap }: {
+  type: SectionType
+  count: number
+  cards: CardData[]
+  loading: boolean
+  error: string | null
+  onCardTap: (index: number) => void
+}) {
+  return (
+    <div style={{ paddingTop: 22 }}>
+      {/* Label + rule */}
+      <div style={{ padding: '0 20px', marginBottom: 12 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1.3px', textTransform: 'uppercase', color: '#999', marginBottom: 8 }}>
+          {SECTION_LABELS[type]} ({count})
+        </div>
+        <div style={{ height: 1, background: '#E8E4DC' }} />
+      </div>
+
+      {/* Horizontal scroll row */}
+      <div style={{
+        display: 'flex',
+        gap: 10,
+        overflowX: 'auto',
+        padding: '0 20px 20px',
+        WebkitOverflowScrolling: 'touch' as any,
+        scrollbarWidth: 'none' as any,
+        msOverflowStyle: 'none' as any,
+      }}>
+        {loading
+          ? Array.from({ length: 5 }).map((_, i) => <ThumbSkeleton key={i} type={type} />)
+          : error
+            ? <div style={{ fontSize: 11, color: '#aaa', padding: '8px 0', fontFamily: 'Inter, sans-serif' }}>Failed to load</div>
+            : cards.map((card, i) => (
+                <TypeThumb key={i} card={card} onTap={() => onCardTap(i)} />
+              ))
+        }
+      </div>
+    </div>
+  )
+}
+
+// ── TypeThumb ──────────────────────────────────────────────────────────────────
+
+function TypeThumb({ card, onTap }: { card: CardData; onTap: () => void }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  const [thumbFailed, setThumbFailed] = useState(false)
+  const workType = card.book.type ?? 'book'
+
+  const videoId = workType === 'talk' ? youTubeId(card.book.url) : null
+  const thumbUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null
+  const coverUrl = `https://covers.openlibrary.org/b/isbn/${card.book.isbn}-M.jpg`
+
+  const isWide = workType === 'talk'
+  const thumbW = isWide ? 104 : 64
+  const thumbH = isWide ? 59 : workType === 'book' ? 92 : 72
+
+  const bgColor = workType === 'book' ? '#E8E4DC'
+    : workType === 'talk' ? '#1a1a1a'
+    : workType === 'podcast' ? '#F0EBE0'
+    : '#EBF0F5'
+
+  return (
+    <button
+      onClick={onTap}
+      style={{
+        flexShrink: 0,
+        background: 'none',
+        border: 'none',
+        padding: 0,
+        cursor: 'pointer',
+        textAlign: 'left',
+        WebkitTapHighlightColor: 'transparent',
+        width: thumbW,
+      }}
+    >
+      <div style={{
+        width: thumbW,
+        height: thumbH,
+        borderRadius: 3,
+        overflow: 'hidden',
+        background: bgColor,
+        boxShadow: '0 1px 4px rgba(0,0,0,0.13)',
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 6,
+      }}>
+        {workType === 'book' && !imgFailed && (
+          <img
+            src={coverUrl}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            onError={() => setImgFailed(true)}
+          />
+        )}
+
+        {workType === 'talk' && (
+          <>
+            {!thumbFailed && thumbUrl && (
+              <img
+                src={thumbUrl}
+                alt=""
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                onError={() => setThumbFailed(true)}
+              />
+            )}
+            <div style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: thumbFailed || !thumbUrl ? 'transparent' : 'rgba(0,0,0,0.18)',
+            }}>
+              <div style={{
+                width: 22, height: 22, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.88)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <div style={{
+                  width: 0, height: 0,
+                  borderStyle: 'solid',
+                  borderWidth: '4px 0 4px 7px',
+                  borderColor: 'transparent transparent transparent #111',
+                  marginLeft: 2,
+                }} />
+              </div>
+            </div>
+          </>
+        )}
+
+        {workType === 'podcast' && (
+          <IconMicrophone size={22} stroke={1.5} color="#aaa" />
+        )}
+
+        {workType === 'article' && (
+          <IconFileText size={20} stroke={1.5} color="#99aab5" />
+        )}
+      </div>
+
+      {/* Title */}
+      <div style={{
+        fontSize: 10,
+        color: '#444',
+        lineHeight: 1.35,
+        fontFamily: 'Inter, sans-serif',
+        fontWeight: 500,
+        overflow: 'hidden',
+        display: '-webkit-box',
+        WebkitLineClamp: 2,
+        WebkitBoxOrient: 'vertical' as any,
+      }}>
+        {card.book.title}
+      </div>
+    </button>
+  )
+}
+
+// ── ThumbSkeleton ──────────────────────────────────────────────────────────────
+
+function ThumbSkeleton({ type }: { type: SectionType }) {
+  const isWide = type === 'talk'
+  const w = isWide ? 104 : 64
+  const h = isWide ? 59 : type === 'book' ? 92 : 72
+
+  return (
+    <div style={{ flexShrink: 0, width: w }}>
+      <div style={{ width: w, height: h, borderRadius: 3, background: '#F0ECE4', marginBottom: 6 }} className="animate-pulse" />
+      <div style={{ height: 8, background: '#F5F3EE', borderRadius: 2, marginBottom: 4, width: '88%' }} className="animate-pulse" />
+      <div style={{ height: 8, background: '#F5F3EE', borderRadius: 2, width: '60%' }} className="animate-pulse" />
+    </div>
+  )
+}
+
+// ── FeedView ───────────────────────────────────────────────────────────────────
+
+interface FeedViewProps {
+  cat: Category
+  sectionType: SectionType
+  cards: CardData[]
+  startIndex: number
+  onBack: () => void
+  onGoDeeper?: (card: CardData) => void
+  savedKeys?: Set<string>
+  onToggleSave?: (card: CardData) => void
+  onCardViewed?: (card: CardData) => void
+}
+
+function FeedView({ cat, sectionType, cards, startIndex, onBack, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: FeedViewProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       {/* Header */}
@@ -521,159 +666,31 @@ function CategoryFeed({ category, cards, loading, loadingMore, totalWorks, error
         </button>
 
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, fontWeight: 700, color: '#111', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {category.title}
+          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#bbb', fontFamily: 'Inter, sans-serif', marginBottom: 3 }}>
+            {SECTION_LABELS[sectionType]}
+          </div>
+          <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 18, fontWeight: 700, color: '#111', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {cat.title}
           </div>
         </div>
 
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <div style={{ textAlign: 'right', flexShrink: 0, marginBottom: 3 }}>
           <div style={{ fontSize: 11, color: '#aaa', fontWeight: 500 }}>
-            {loading ? '…' : exhausted ? `${totalWorks} of ${totalWorks}` : cards.length < totalWorks ? `${cards.length} of ${totalWorks}` : `${cards.length} cards`}
-          </div>
-          <div style={{ fontSize: 9, color: '#ccc', letterSpacing: '0.3px', marginTop: 1 }}>
-            {loadingMore ? 'loading more…' : category.sub}
+            {cards.length} card{cards.length !== 1 ? 's' : ''}
           </div>
         </div>
       </div>
 
-      {/* Progress bar */}
-      <div style={{ height: 2, background: '#EBEBEB', flexShrink: 0 }}>
-        <div style={{
-          height: '100%',
-          background: '#111',
-          width: loading ? '30%' : loadingMore ? '60%' : '100%',
-          transition: 'width 0.8s ease',
-          opacity: (loading || loadingMore) ? 1 : 0,
-        }} />
-      </div>
-
-      {error && !loading && (
-        <div style={{ padding: '20px', flexShrink: 0 }}>
-          <div style={{ fontSize: 12, color: '#888', lineHeight: 1.5 }}>{error}</div>
-          <button
-            onClick={onBack}
-            style={{ marginTop: 12, fontSize: 10, fontWeight: 600, letterSpacing: '0.7px', textTransform: 'uppercase', color: '#111', background: 'none', border: '1px solid #111', borderRadius: 3, padding: '8px 14px', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
-          >
-            Go back
-          </button>
-        </div>
-      )}
-
-      {!error && exhausted && (
-        <ExhaustedView
-          category={category.title}
-          totalWorks={totalWorks}
-          onRefresh={onRefresh}
-          onBack={onBack}
-        />
-      )}
-
-      {!error && !exhausted && (
-        <CardSwipeFeed
-          cards={cards}
-          loading={loading}
-          onGoDeeper={onGoDeeper}
-          onIndexChange={onCardIndexChange}
-          savedKeys={savedKeys}
-          onToggleSave={onToggleSave}
-          onCardViewed={onCardViewed}
-        />
-      )}
+      <CardSwipeFeed
+        cards={cards}
+        loading={false}
+        initialIndex={startIndex}
+        onGoDeeper={onGoDeeper}
+        savedKeys={savedKeys}
+        onToggleSave={onToggleSave}
+        onCardViewed={onCardViewed}
+      />
     </div>
   )
 }
 
-// ── Exhausted end-of-category view ─────────────────────────────────────────────
-
-function ExhaustedView({ category, totalWorks, onRefresh, onBack }: {
-  category: string
-  totalWorks: number
-  onRefresh: () => void
-  onBack: () => void
-}) {
-  return (
-    <div style={{
-      flex: 1,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '0 32px 48px',
-      textAlign: 'center',
-    }}>
-      {/* Rule */}
-      <div style={{ width: 32, height: 1.5, background: '#D0CCC4', marginBottom: 24 }} />
-
-      {/* Heading */}
-      <div style={{
-        fontFamily: '"Playfair Display", serif',
-        fontSize: 20,
-        fontWeight: 700,
-        color: '#111',
-        lineHeight: 1.3,
-        marginBottom: 10,
-      }}>
-        You've seen everything<br />in {category}.
-      </div>
-
-      {/* Body */}
-      <div style={{
-        fontSize: 13,
-        color: '#888',
-        fontFamily: 'Inter, sans-serif',
-        lineHeight: 1.65,
-        marginBottom: 36,
-      }}>
-        {totalWorks === 1
-          ? 'That was the only work in this category.'
-          : `You went through all ${totalWorks} works. Start over to see them again.`}
-      </div>
-
-      {/* Start Over */}
-      <button
-        onClick={onRefresh}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 7,
-          width: '100%',
-          padding: '14px 0',
-          background: '#111',
-          color: '#fff',
-          border: 'none',
-          fontFamily: 'Inter, sans-serif',
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: '1.2px',
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-          justifyContent: 'center',
-          marginBottom: 12,
-        }}
-      >
-        <IconRefresh size={13} stroke={2} />
-        Start Over
-      </button>
-
-      {/* Back */}
-      <button
-        onClick={onBack}
-        style={{
-          width: '100%',
-          padding: '13px 0',
-          background: 'none',
-          color: '#111',
-          border: '1.5px solid #D0CCC4',
-          fontFamily: 'Inter, sans-serif',
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: '1.2px',
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-        }}
-      >
-        Back to Explore
-      </button>
-    </div>
-  )
-}

@@ -5,6 +5,7 @@ import type { CardData } from '../useCards'
 interface Props {
   cards: CardData[]
   loading: boolean
+  initialIndex?: number
   onIndexChange?: (index: number) => void
   onGoDeeper?: (card: CardData) => void
   savedKeys?: Set<string>
@@ -12,8 +13,11 @@ interface Props {
   onCardViewed?: (card: CardData) => void
 }
 
-export function CardSwipeFeed({ cards, loading, onIndexChange, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: Props) {
-  const [index, setIndex] = useState(0)
+export function CardSwipeFeed({ cards, loading, initialIndex, onIndexChange, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: Props) {
+  const [index, setIndex] = useState(initialIndex ?? 0)
+  // Keep a ref so the reset effect always sees the latest initialIndex value
+  const initialIndexRef = useRef(initialIndex ?? 0)
+  initialIndexRef.current = initialIndex ?? 0
   const [saved, setSaved] = useState<Set<number>>(new Set())
   const [dragOffset, setDragOffset] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
@@ -25,12 +29,13 @@ export function CardSwipeFeed({ cards, loading, onIndexChange, onGoDeeper, saved
 
   const firstKey = cards.length > 0 ? `${cards[0].book.title}::${cards[0].book.author}` : '__empty__'
 
-  // Reset on new card set
+  // Reset on new card set, starting at initialIndex
   useEffect(() => {
-    setIndex(0)
+    const start = initialIndexRef.current
+    setIndex(start)
     setSaved(new Set())
     savedInitialized.current = false
-    onIndexChange?.(0)
+    onIndexChange?.(start)
   }, [firstKey])
 
   // Fire onCardViewed whenever the visible card changes

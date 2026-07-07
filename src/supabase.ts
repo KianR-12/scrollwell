@@ -18,6 +18,8 @@ interface DbRow {
   pages: number | null
   social_count: number
   conversation_tip?: string | null
+  type?: string | null
+  url?: string | null
 }
 
 export interface SavedCard {
@@ -40,6 +42,8 @@ export function dbRowToCard(row: DbRow): CardData {
       pages: row.pages ?? 0,
       isbn: row.isbn ?? '0000000000000',
       category: row.category,
+      type: row.type ?? 'book',
+      url: row.url ?? undefined,
     },
   }
 }
@@ -55,24 +59,23 @@ export async function fetchCardsFromDb(titles: string[]): Promise<Map<string, Ca
 }
 
 export async function saveCardToDb(card: CardData, type: string): Promise<string | null> {
-  const { data } = await supabase.from('cards').upsert(
-    {
-      title: card.book.title,
-      creator: card.book.author,
-      type,
-      category: card.book.category,
-      hook: card.hook,
-      hook_sub: card.hookSub,
-      gist: card.gist,
-      conversation_tip: null,
-      cover_url: `https://covers.openlibrary.org/b/isbn/${card.book.isbn}-M.jpg`,
-      isbn: card.book.isbn,
-      year: card.book.year,
-      pages: card.book.pages,
-      social_count: card.socialCount,
-    },
-    { onConflict: 'title,creator' }
-  ).select('id').single()
+  const row: Record<string, unknown> = {
+    title: card.book.title,
+    creator: card.book.author,
+    type,
+    category: card.book.category,
+    hook: card.hook,
+    hook_sub: card.hookSub,
+    gist: card.gist,
+    conversation_tip: null,
+    cover_url: card.book.url ?? `https://covers.openlibrary.org/b/isbn/${card.book.isbn}-M.jpg`,
+    isbn: card.book.isbn,
+    year: card.book.year,
+    pages: card.book.pages,
+    social_count: card.socialCount,
+  }
+  if (card.book.url !== undefined) row.url = card.book.url
+  const { data } = await supabase.from('cards').upsert(row, { onConflict: 'title,creator' }).select('id').single()
   return (data as { id: string } | null)?.id ?? null
 }
 
