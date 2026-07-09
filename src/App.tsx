@@ -1,10 +1,10 @@
 import { useState, useCallback, Component, type ReactNode } from 'react'
-import { IconHome, IconCompass, IconBookmark, IconTrendingUp, IconUser } from '@tabler/icons-react'
+import { IconHome, IconCompass, IconBookmark, /* IconTrendingUp, */ IconUser } from '@tabler/icons-react'
 import { HomeTab } from './components/HomeTab'
 import { ExploreTab } from './components/ExploreTab'
 import { DeepDiveTab } from './components/DeepDiveTab'
 import { LibraryTab } from './components/LibraryTab'
-import { TrendingTab } from './components/TrendingTab'
+// import { TrendingTab } from './components/TrendingTab'
 import { ProfileTab } from './components/ProfileTab'
 import { AuthScreen, GUEST_USER_ID } from './components/AuthScreen'
 import { useCards } from './useCards'
@@ -12,14 +12,14 @@ import { useSavedCards } from './useSavedCards'
 import { useAuth } from './useAuth'
 import type { CardData } from './useCards'
 
-type Tab = 'home' | 'explore' | 'library' | 'trending' | 'profile'
+type Tab = 'home' | 'explore' | 'library' | 'profile' // | 'trending'
 
 const TABS: { id: Tab; label: string; Icon: typeof IconHome }[] = [
-  { id: 'home',     label: 'Home',     Icon: IconHome        },
-  { id: 'explore',  label: 'Explore',  Icon: IconCompass     },
-  { id: 'library',  label: 'Library',  Icon: IconBookmark    },
-  { id: 'trending', label: 'Trending', Icon: IconTrendingUp  },
-  { id: 'profile',  label: 'Profile',  Icon: IconUser        },
+  { id: 'home',    label: 'Home',    Icon: IconHome     },
+  { id: 'explore', label: 'Explore', Icon: IconCompass  },
+  { id: 'library', label: 'Library', Icon: IconBookmark },
+  // { id: 'trending', label: 'Trending', Icon: IconTrendingUp },
+  { id: 'profile', label: 'Profile', Icon: IconUser     },
 ]
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
@@ -109,14 +109,14 @@ function AppShell({ userId, email, isGuest = false, onSignOut }: { userId: strin
         {tab === 'library' && (
           <LibraryTab userId={userId} onToggleSave={toggleSave} />
         )}
-        {tab === 'trending' && (
+        {/* {tab === 'trending' && (
           <TrendingTab
             onGoDeeper={setDeepDiveCard}
             savedKeys={savedKeys}
             onToggleSave={toggleSave}
             onCardViewed={recordViewed}
           />
-        )}
+        )} */}
         {tab === 'profile' && (
           <ProfileTab
             savedCount={savedKeys.size}
