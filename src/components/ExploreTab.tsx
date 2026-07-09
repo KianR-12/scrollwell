@@ -113,10 +113,6 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
         cat={view.cat}
         onBack={goBack}
         onOpenFeed={openFeed}
-        onGoDeeper={onGoDeeper}
-        savedKeys={savedKeys}
-        onToggleSave={onToggleSave}
-        onCardViewed={onCardViewed}
       />
     )
   }
@@ -373,14 +369,11 @@ interface CategoryDetailProps {
   cat: Category
   onBack: () => void
   onOpenFeed: (cat: Category, sectionType: SectionType, cards: CardData[], startIndex: number) => void
-  onGoDeeper?: (card: CardData) => void
-  savedKeys?: Set<string>
-  onToggleSave?: (card: CardData) => void
-  onCardViewed?: (card: CardData) => void
 }
 
 function CategoryDetail({ cat, onBack, onOpenFeed }: CategoryDetailProps) {
   const allWorks = CONTENT_LIBRARY[cat.title] ?? []
+  const [activeTab, setActiveTab] = useState(0)
 
   const [sections, setSections] = useState<Record<SectionType, SectionState>>(() => {
     const init = {} as Record<SectionType, SectionState>
@@ -392,22 +385,56 @@ function CategoryDetail({ cat, onBack, onOpenFeed }: CategoryDetailProps) {
   })
 
   useEffect(() => {
-    SECTION_ORDER.forEach(type => {
+    for (const type of SECTION_ORDER) {
       const works = allWorks.filter(w => w.type === type)
-      if (works.length === 0) return
+      if (works.length === 0) continue
       generateCardsForWorks(works, cat.title)
         .then(cards => setSections(prev => ({ ...prev, [type]: { works, cards, loading: false, error: null } })))
         .catch(err => setSections(prev => ({
           ...prev,
           [type]: { ...prev[type], loading: false, error: err instanceof Error ? err.message : 'Failed to load' },
         })))
-    })
+    }
   }, [])
 
-  const totalWorks = allWorks.length
+  // Non-passive touchmove on the panels area to prevent page scroll during horizontal swipe
+  const panelsRef = useRef<HTMLDivElement>(null)
+  const touchStartX = useRef(0)
+  const touchStartY = useRef(0)
+  const swipeLock = useRef<'h' | 'v' | null>(null)
+
+  useEffect(() => {
+    const el = panelsRef.current
+    if (!el) return
+    const onMove = (e: TouchEvent) => {
+      const dx = e.touches[0].clientX - touchStartX.current
+      const dy = e.touches[0].clientY - touchStartY.current
+      if (swipeLock.current === null) {
+        if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) swipeLock.current = 'h'
+        else if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx) * 1.5) swipeLock.current = 'v'
+      }
+      if (swipeLock.current === 'h') e.preventDefault()
+    }
+    el.addEventListener('touchmove', onMove, { passive: false })
+    return () => el.removeEventListener('touchmove', onMove)
+  }, [])
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX
+    touchStartY.current = e.touches[0].clientY
+    swipeLock.current = null
+  }
+
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (swipeLock.current !== 'h') return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    if (dx < -50) setActiveTab(t => Math.min(t + 1, SECTION_ORDER.length - 1))
+    else if (dx > 50) setActiveTab(t => Math.max(t - 1, 0))
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
+
       {/* Header */}
       <div style={{
         padding: '52px 20px 11px',
@@ -415,7 +442,6 @@ function CategoryDetail({ cat, onBack, onOpenFeed }: CategoryDetailProps) {
         flexShrink: 0,
         display: 'flex',
         alignItems: 'flex-end',
-        justifyContent: 'space-between',
         gap: 12,
       }}>
         <button
@@ -424,85 +450,148 @@ function CategoryDetail({ cat, onBack, onOpenFeed }: CategoryDetailProps) {
         >
           <IconArrowLeft size={18} stroke={1.8} />
         </button>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, fontWeight: 700, color: '#111', letterSpacing: '-0.3px' }}>
-            {cat.title}
-          </div>
-        </div>
-        <div style={{ fontSize: 10, color: '#ccc', fontWeight: 500, flexShrink: 0, marginBottom: 3 }}>
-          {totalWorks} works
+        <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, fontWeight: 700, color: '#111', letterSpacing: '-0.3px', flex: 1, minWidth: 0 }}>
+          {cat.title}
         </div>
       </div>
 
-      {/* Sections */}
-      <div style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
-        {SECTION_ORDER.map(type => {
-          const { works, cards, loading, error } = sections[type]
-          if (!loading && works.length === 0) return null
+      {/* Tab bar */}
+      <div style={{ display: 'flex', borderBottom: '1px solid #E8E4DC', flexShrink: 0 }}>
+        {SECTION_ORDER.map((type, i) => {
+          const active = activeTab === i
           return (
-            <SectionRow
+            <button
               key={type}
-              type={type}
-              count={works.length}
-              cards={cards}
-              loading={loading}
-              error={error}
-              onCardTap={i => onOpenFeed(cat, type, cards, i)}
-            />
+              onClick={() => setActiveTab(i)}
+              style={{
+                flex: 1,
+                padding: '10px 0',
+                background: 'none',
+                border: 'none',
+                borderBottom: active ? '2px solid #111' : '2px solid transparent',
+                marginBottom: -1,
+                cursor: 'pointer',
+                fontSize: 11,
+                fontWeight: active ? 700 : 500,
+                color: active ? '#111' : '#bbb',
+                fontFamily: 'Inter, sans-serif',
+                letterSpacing: '0.2px',
+                transition: 'color 0.15s, border-color 0.15s',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+            >
+              {SECTION_LABELS[type]}
+            </button>
           )
         })}
-        <div style={{ height: 32 }} />
+      </div>
+
+      {/* Swipeable tab panels */}
+      <div
+        ref={panelsRef}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}
+      >
+        <div style={{
+          display: 'flex',
+          width: '400%',
+          height: '100%',
+          transform: `translateX(-${activeTab * 25}%)`,
+          transition: 'transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+          willChange: 'transform',
+        }}>
+          {SECTION_ORDER.map(type => {
+            const { works, cards, loading, error } = sections[type]
+            return (
+              <div
+                key={type}
+                style={{ width: '25%', height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch' as any }}
+              >
+                <TabPanel
+                  type={type}
+                  works={works}
+                  cards={cards}
+                  loading={loading}
+                  error={error}
+                  onCardTap={i => onOpenFeed(cat, type, cards, i)}
+                />
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )
 }
 
-// ── SectionRow ─────────────────────────────────────────────────────────────────
+// ── TabPanel ───────────────────────────────────────────────────────────────────
 
-function SectionRow({ type, count, cards, loading, error, onCardTap }: {
+function TabPanel({ type, works, cards, loading, error, onCardTap }: {
   type: SectionType
-  count: number
+  works: Work[]
   cards: CardData[]
   loading: boolean
   error: string | null
-  onCardTap: (index: number) => void
+  onCardTap: (i: number) => void
 }) {
-  return (
-    <div style={{ paddingTop: 22 }}>
-      {/* Label + rule */}
-      <div style={{ padding: '0 20px', marginBottom: 12 }}>
-        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1.3px', textTransform: 'uppercase', color: '#999', marginBottom: 8 }}>
-          {SECTION_LABELS[type]} ({count})
-        </div>
-        <div style={{ height: 1, background: '#E8E4DC' }} />
-      </div>
+  const cols = type === 'talk' ? 2 : 3
 
-      {/* Horizontal scroll row */}
+  if (loading) {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8, padding: '12px 16px 28px' }}>
+        {Array.from({ length: cols * 3 }).map((_, i) => (
+          <GridCardSkeleton key={i} type={type} />
+        ))}
+      </div>
+    )
+  }
+
+  if (works.length === 0) {
+    return (
       <div style={{
         display: 'flex',
-        gap: 10,
-        overflowX: 'auto',
-        padding: '0 20px 20px',
-        WebkitOverflowScrolling: 'touch' as any,
-        scrollbarWidth: 'none' as any,
-        msOverflowStyle: 'none' as any,
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        padding: '0 32px',
+        textAlign: 'center',
       }}>
-        {loading
-          ? Array.from({ length: 5 }).map((_, i) => <ThumbSkeleton key={i} type={type} />)
-          : error
-            ? <div style={{ fontSize: 11, color: '#aaa', padding: '8px 0', fontFamily: 'Inter, sans-serif' }}>Failed to load</div>
-            : cards.map((card, i) => (
-                <TypeThumb key={i} card={card} onTap={() => onCardTap(i)} />
-              ))
-        }
+        <div>
+          <div style={{ width: 28, height: 1.5, background: '#E0DCD4', margin: '0 auto 20px' }} />
+          <div style={{
+            fontSize: 14,
+            color: '#bbb',
+            fontFamily: 'Inter, sans-serif',
+            lineHeight: 1.6,
+          }}>
+            No {SECTION_LABELS[type].toLowerCase()} yet<br />in this category.
+          </div>
+        </div>
       </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: '24px 16px' }}>
+        <div style={{ fontSize: 12, color: '#bbb', fontFamily: 'Inter, sans-serif' }}>Failed to load</div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8, padding: '12px 16px 28px' }}>
+      {cards.map((card, i) => (
+        <GridCard key={i} card={card} onTap={() => onCardTap(i)} />
+      ))}
     </div>
   )
 }
 
-// ── TypeThumb ──────────────────────────────────────────────────────────────────
+// ── GridCard ───────────────────────────────────────────────────────────────────
 
-function TypeThumb({ card, onTap }: { card: CardData; onTap: () => void }) {
+function GridCard({ card, onTap }: { card: CardData; onTap: () => void }) {
   const [imgFailed, setImgFailed] = useState(false)
   const [thumbFailed, setThumbFailed] = useState(false)
   const workType = card.book.type ?? 'book'
@@ -511,10 +600,7 @@ function TypeThumb({ card, onTap }: { card: CardData; onTap: () => void }) {
   const thumbUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null
   const coverUrl = `https://covers.openlibrary.org/b/isbn/${card.book.isbn}-M.jpg`
 
-  const isWide = workType === 'talk'
-  const thumbW = isWide ? 104 : 64
-  const thumbH = isWide ? 59 : workType === 'book' ? 92 : 72
-
+  const aspectRatio = workType === 'talk' ? '16 / 9' : workType === 'book' ? '2 / 3' : '1 / 1'
   const bgColor = workType === 'book' ? '#E8E4DC'
     : workType === 'talk' ? '#1a1a1a'
     : workType === 'podcast' ? '#F0EBE0'
@@ -524,28 +610,28 @@ function TypeThumb({ card, onTap }: { card: CardData; onTap: () => void }) {
     <button
       onClick={onTap}
       style={{
-        flexShrink: 0,
         background: 'none',
         border: 'none',
         padding: 0,
         cursor: 'pointer',
         textAlign: 'left',
+        width: '100%',
         WebkitTapHighlightColor: 'transparent',
-        width: thumbW,
       }}
     >
+      {/* Thumbnail */}
       <div style={{
-        width: thumbW,
-        height: thumbH,
+        width: '100%',
+        aspectRatio,
         borderRadius: 3,
         overflow: 'hidden',
         background: bgColor,
-        boxShadow: '0 1px 4px rgba(0,0,0,0.13)',
         position: 'relative',
+        boxShadow: '0 1px 5px rgba(0,0,0,0.12)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 6,
+        marginBottom: 5,
       }}>
         {workType === 'book' && !imgFailed && (
           <img
@@ -569,17 +655,18 @@ function TypeThumb({ card, onTap }: { card: CardData; onTap: () => void }) {
             <div style={{
               position: 'absolute', inset: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: thumbFailed || !thumbUrl ? 'transparent' : 'rgba(0,0,0,0.18)',
+              background: thumbFailed || !thumbUrl ? 'transparent' : 'rgba(0,0,0,0.16)',
             }}>
               <div style={{
-                width: 22, height: 22, borderRadius: '50%',
-                background: 'rgba(255,255,255,0.88)',
+                width: 28, height: 28, borderRadius: '50%',
+                background: 'rgba(255,255,255,0.92)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
               }}>
                 <div style={{
                   width: 0, height: 0,
                   borderStyle: 'solid',
-                  borderWidth: '4px 0 4px 7px',
+                  borderWidth: '5px 0 5px 9px',
                   borderColor: 'transparent transparent transparent #111',
                   marginLeft: 2,
                 }} />
@@ -589,19 +676,19 @@ function TypeThumb({ card, onTap }: { card: CardData; onTap: () => void }) {
         )}
 
         {workType === 'podcast' && (
-          <IconMicrophone size={22} stroke={1.5} color="#aaa" />
+          <IconMicrophone size={28} stroke={1.4} color="#bbb" />
         )}
 
         {workType === 'article' && (
-          <IconFileText size={20} stroke={1.5} color="#99aab5" />
+          <IconFileText size={26} stroke={1.4} color="#aab5c0" />
         )}
       </div>
 
       {/* Title */}
       <div style={{
-        fontSize: 10,
-        color: '#444',
-        lineHeight: 1.35,
+        fontSize: 10.5,
+        color: '#333',
+        lineHeight: 1.32,
         fontFamily: 'Inter, sans-serif',
         fontWeight: 500,
         overflow: 'hidden',
@@ -611,22 +698,33 @@ function TypeThumb({ card, onTap }: { card: CardData; onTap: () => void }) {
       }}>
         {card.book.title}
       </div>
+
+      {/* Author */}
+      <div style={{
+        fontSize: 9.5,
+        color: '#aaa',
+        lineHeight: 1.3,
+        marginTop: 2,
+        fontFamily: 'Inter, sans-serif',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+      }}>
+        {card.book.author}
+      </div>
     </button>
   )
 }
 
-// ── ThumbSkeleton ──────────────────────────────────────────────────────────────
+// ── GridCardSkeleton ───────────────────────────────────────────────────────────
 
-function ThumbSkeleton({ type }: { type: SectionType }) {
-  const isWide = type === 'talk'
-  const w = isWide ? 104 : 64
-  const h = isWide ? 59 : type === 'book' ? 92 : 72
-
+function GridCardSkeleton({ type }: { type: SectionType }) {
+  const aspectRatio = type === 'talk' ? '16 / 9' : type === 'book' ? '2 / 3' : '1 / 1'
   return (
-    <div style={{ flexShrink: 0, width: w }}>
-      <div style={{ width: w, height: h, borderRadius: 3, background: '#F0ECE4', marginBottom: 6 }} className="animate-pulse" />
-      <div style={{ height: 8, background: '#F5F3EE', borderRadius: 2, marginBottom: 4, width: '88%' }} className="animate-pulse" />
-      <div style={{ height: 8, background: '#F5F3EE', borderRadius: 2, width: '60%' }} className="animate-pulse" />
+    <div>
+      <div style={{ width: '100%', aspectRatio, borderRadius: 3, background: '#F0ECE4', marginBottom: 5 }} className="animate-pulse" />
+      <div style={{ height: 9, background: '#F5F3EE', borderRadius: 2, marginBottom: 4, width: '85%' }} className="animate-pulse" />
+      <div style={{ height: 8, background: '#F5F3EE', borderRadius: 2, width: '55%' }} className="animate-pulse" />
     </div>
   )
 }
@@ -648,7 +746,6 @@ interface FeedViewProps {
 function FeedView({ cat, sectionType, cards, startIndex, onBack, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: FeedViewProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-      {/* Header */}
       <div style={{
         padding: '52px 20px 11px',
         borderBottom: '2px solid #111',
@@ -693,4 +790,3 @@ function FeedView({ cat, sectionType, cards, startIndex, onBack, onGoDeeper, sav
     </div>
   )
 }
-
