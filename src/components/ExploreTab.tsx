@@ -358,17 +358,32 @@ function CategoryDetail({ cat, onBack, onGoDeeper, savedKeys, onToggleSave, onCa
 
   // Load all types in parallel
   useEffect(() => {
-    for (const type of SECTION_ORDER) {
-      const works = allWorks.filter(w => w.type === type)
-      if (works.length === 0) continue
-      generateCardsForWorks(works, cat.title)
-        .then(cards => setSections(prev => ({ ...prev, [type]: { works, cards, loading: false, error: null } })))
-        .catch(err => setSections(prev => ({
+    loadType('book')
+    loadType('talk')
+    loadType('podcast')
+    loadType('article')
+  }, [])
+
+  function loadType(type: SectionType) {
+    const works = allWorks.filter(w => w.type === type)
+    if (works.length === 0) return
+    setSections(prev => ({ ...prev, [type]: { ...prev[type], loading: true, error: null } }))
+    generateCardsForWorks(works, cat.title)
+      .then(cards => {
+        if (cards.length === 0) {
+          setSections(prev => ({ ...prev, [type]: { works, cards: [], loading: false, error: 'No cards returned — tap to retry.' } }))
+        } else {
+          setSections(prev => ({ ...prev, [type]: { works, cards, loading: false, error: null } }))
+        }
+      })
+      .catch(err => {
+        console.error(`[CategoryDetail] ${cat.title} / ${type} failed:`, err)
+        setSections(prev => ({
           ...prev,
           [type]: { ...prev[type], loading: false, error: err instanceof Error ? err.message : 'Failed to load' },
-        })))
-    }
-  }, [])
+        }))
+      })
+  }
 
   // Swipe left/right on the tab bar to switch tabs
   const tabBarTouchStartX = useRef(0)
@@ -446,6 +461,8 @@ function CategoryDetail({ cat, onBack, onGoDeeper, savedKeys, onToggleSave, onCa
       {/* Feed area — full card swipe feed for the active tab */}
       {!activeSection.loading && activeSection.works.length === 0 ? (
         <EmptyTabView type={activeType} />
+      ) : activeSection.error && !activeSection.loading ? (
+        <ErrorTabView error={activeSection.error} onRetry={() => loadType(activeType)} />
       ) : (
         <CardSwipeFeed
           key={activeType}
@@ -478,6 +495,46 @@ function EmptyTabView({ type }: { type: SectionType }) {
         <div style={{ fontSize: 14, color: '#bbb', fontFamily: 'Inter, sans-serif', lineHeight: 1.7 }}>
           No {SECTION_LABELS[type].toLowerCase()} yet<br />in this category.
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── ErrorTabView ───────────────────────────────────────────────────────────────
+
+function ErrorTabView({ error, onRetry }: { error: string; onRetry: () => void }) {
+  return (
+    <div style={{
+      flex: 1,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 36px',
+      textAlign: 'center',
+    }}>
+      <div>
+        <div style={{ width: 28, height: 1.5, background: '#E0DCD4', margin: '0 auto 20px' }} />
+        <div style={{ fontSize: 13, color: '#bbb', fontFamily: 'Inter, sans-serif', lineHeight: 1.7, marginBottom: 20 }}>
+          {error}
+        </div>
+        <button
+          onClick={onRetry}
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.8px',
+            textTransform: 'uppercase',
+            color: '#111',
+            background: 'none',
+            border: '1px solid #111',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            fontFamily: 'Inter, sans-serif',
+            borderRadius: 3,
+          }}
+        >
+          Try again
+        </button>
       </div>
     </div>
   )
