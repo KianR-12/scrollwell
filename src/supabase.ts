@@ -144,3 +144,52 @@ export async function createProfile(userId: string, email: string, name: string)
     { onConflict: 'id' }
   )
 }
+
+export interface TrendingCard {
+  card: CardData
+  saveCount: number
+}
+
+export async function fetchTrending(): Promise<TrendingCard[]> {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+  const { data: saves } = await supabase
+    .from('saved_cards')
+    .select('card_id')
+    .gte('saved_at', since)
+
+  if (!saves || saves.length === 0) return []
+
+  // Count saves per card in JS
+  const counts = new Map<string, number>()
+  for (const row of saves as { card_id: string }[]) {
+    counts.set(row.card_id, (counts.get(row.card_id) ?? 0) + 1)
+  }
+
+  // Top 20 by count
+  const top = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 20)
+
+  if (top.length === 0) return []
+
+  const { data: cardRows } = await supabase
+    .from('cards')
+    .select('*')
+    .in('id', top.map(([id]) => id))
+
+  if (!cardRows) return []
+
+  const cardMap = new Map<string, CardData>()
+  for (const row of cardRows as (DbRow & { id: string })[]) {
+    cardMap.set(row.id, dbRowToCard(row))
+  }
+
+  return top
+    .map(([id, saveCount]) => {
+      const card = cardMap.get(id)
+      if (!card) return null
+      return { card, saveCount }
+    })
+    .filter((t): t is TrendingCard => t !== null)
+}

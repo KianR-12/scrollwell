@@ -1,9 +1,10 @@
 import { useState, useCallback, Component, type ReactNode } from 'react'
-import { IconHome, IconCompass, IconBookmark, IconUsers, IconUser } from '@tabler/icons-react'
+import { IconHome, IconCompass, IconBookmark, IconTrendingUp, IconUser } from '@tabler/icons-react'
 import { HomeTab } from './components/HomeTab'
 import { ExploreTab } from './components/ExploreTab'
 import { DeepDiveTab } from './components/DeepDiveTab'
 import { LibraryTab } from './components/LibraryTab'
+import { TrendingTab } from './components/TrendingTab'
 import { ProfileTab } from './components/ProfileTab'
 import { AuthScreen, GUEST_USER_ID } from './components/AuthScreen'
 import { useCards } from './useCards'
@@ -11,14 +12,14 @@ import { useSavedCards } from './useSavedCards'
 import { useAuth } from './useAuth'
 import type { CardData } from './useCards'
 
-type Tab = 'home' | 'explore' | 'library' | 'friends' | 'profile'
+type Tab = 'home' | 'explore' | 'library' | 'trending' | 'profile'
 
 const TABS: { id: Tab; label: string; Icon: typeof IconHome }[] = [
-  { id: 'home',    label: 'Home',    Icon: IconHome     },
-  { id: 'explore', label: 'Explore', Icon: IconCompass  },
-  { id: 'library', label: 'Library', Icon: IconBookmark },
-  { id: 'friends', label: 'Friends', Icon: IconUsers    },
-  { id: 'profile', label: 'Profile', Icon: IconUser     },
+  { id: 'home',     label: 'Home',     Icon: IconHome        },
+  { id: 'explore',  label: 'Explore',  Icon: IconCompass     },
+  { id: 'library',  label: 'Library',  Icon: IconBookmark    },
+  { id: 'trending', label: 'Trending', Icon: IconTrendingUp  },
+  { id: 'profile',  label: 'Profile',  Icon: IconUser        },
 ]
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
@@ -108,6 +109,14 @@ function AppShell({ userId, email, isGuest = false, onSignOut }: { userId: strin
         {tab === 'library' && (
           <LibraryTab userId={userId} onToggleSave={toggleSave} />
         )}
+        {tab === 'trending' && (
+          <TrendingTab
+            onGoDeeper={setDeepDiveCard}
+            savedKeys={savedKeys}
+            onToggleSave={toggleSave}
+            onCardViewed={recordViewed}
+          />
+        )}
         {tab === 'profile' && (
           <ProfileTab
             savedCount={savedKeys.size}
@@ -115,9 +124,6 @@ function AppShell({ userId, email, isGuest = false, onSignOut }: { userId: strin
             email={email}
             onSignOut={onSignOut}
           />
-        )}
-        {tab !== 'home' && tab !== 'explore' && tab !== 'library' && tab !== 'profile' && (
-          <ComingSoon label={TABS.find(t => t.id === tab)!.label} />
         )}
       </div>
 
@@ -200,23 +206,6 @@ function Splash() {
           scrollwell
         </div>
         <div style={{ flex: 1, height: 1.5, background: '#111' }} />
-      </div>
-    </div>
-  )
-}
-
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '52px 20px 11px', borderBottom: '2px solid #111', flexShrink: 0 }}>
-        <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: '#111', letterSpacing: '-0.3px' }}>
-          {label}
-        </div>
-      </div>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: 11, color: '#ccc', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 600 }}>
-          Coming soon
-        </span>
       </div>
     </div>
   )
