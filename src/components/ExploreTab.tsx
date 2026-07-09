@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { IconArrowLeft, IconSearch, IconX, IconRotate, IconMicrophone, IconFileText } from '@tabler/icons-react'
+import { IconArrowLeft, IconSearch, IconX, IconRotate } from '@tabler/icons-react'
 import { CardSwipeFeed } from './CardSwipeFeed'
 import { generateCardsForWorks, generateCard } from '../api'
 import { CONTENT_LIBRARY, type Work } from '../contentLibrary'
@@ -38,20 +38,11 @@ const SECTION_LABELS: Record<SectionType, string> = {
   article: 'Articles',
 }
 
-// ── YouTube helper ─────────────────────────────────────────────────────────────
-
-function youTubeId(url: string | undefined): string | null {
-  if (!url) return null
-  const m = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/) || url.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/)
-  return m?.[1] ?? null
-}
-
 // ── View types ─────────────────────────────────────────────────────────────────
 
 type ExploreView =
   | { kind: 'grid' }
   | { kind: 'category'; cat: Category }
-  | { kind: 'feed'; cat: Category; sectionType: SectionType; cards: CardData[]; startIndex: number }
   | { kind: 'search'; query: string; card: CardData | null; loading: boolean; error: string | null }
 
 // ── ExploreTab ─────────────────────────────────────────────────────────────────
@@ -81,15 +72,6 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
     }
   }
 
-  function openFeed(cat: Category, sectionType: SectionType, cards: CardData[], startIndex: number) {
-    setView({ kind: 'feed', cat, sectionType, cards, startIndex })
-  }
-
-  function goBack() {
-    if (view.kind === 'feed') setView({ kind: 'category', cat: view.cat })
-    else setView({ kind: 'grid' })
-  }
-
   if (view.kind === 'search') {
     return (
       <SearchResultView
@@ -97,7 +79,7 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
         card={view.card}
         loading={view.loading}
         error={view.error}
-        onBack={goBack}
+        onBack={() => setView({ kind: 'grid' })}
         onRetry={() => handleSearch(view.query)}
         onGoDeeper={onGoDeeper}
         savedKeys={savedKeys}
@@ -111,20 +93,7 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
     return (
       <CategoryDetail
         cat={view.cat}
-        onBack={goBack}
-        onOpenFeed={openFeed}
-      />
-    )
-  }
-
-  if (view.kind === 'feed') {
-    return (
-      <FeedView
-        cat={view.cat}
-        sectionType={view.sectionType}
-        cards={view.cards}
-        startIndex={view.startIndex}
-        onBack={goBack}
+        onBack={() => setView({ kind: 'grid' })}
         onGoDeeper={onGoDeeper}
         savedKeys={savedKeys}
         onToggleSave={onToggleSave}
@@ -368,10 +337,13 @@ interface SectionState {
 interface CategoryDetailProps {
   cat: Category
   onBack: () => void
-  onOpenFeed: (cat: Category, sectionType: SectionType, cards: CardData[], startIndex: number) => void
+  onGoDeeper?: (card: CardData) => void
+  savedKeys?: Set<string>
+  onToggleSave?: (card: CardData) => void
+  onCardViewed?: (card: CardData) => void
 }
 
-function CategoryDetail({ cat, onBack, onOpenFeed }: CategoryDetailProps) {
+function CategoryDetail({ cat, onBack, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: CategoryDetailProps) {
   const allWorks = CONTENT_LIBRARY[cat.title] ?? []
   const [activeTab, setActiveTab] = useState(0)
 
@@ -384,6 +356,7 @@ function CategoryDetail({ cat, onBack, onOpenFeed }: CategoryDetailProps) {
     return init
   })
 
+  // Load all types in parallel
   useEffect(() => {
     for (const type of SECTION_ORDER) {
       const works = allWorks.filter(w => w.type === type)
@@ -397,40 +370,20 @@ function CategoryDetail({ cat, onBack, onOpenFeed }: CategoryDetailProps) {
     }
   }, [])
 
-  // Non-passive touchmove on the panels area to prevent page scroll during horizontal swipe
-  const panelsRef = useRef<HTMLDivElement>(null)
-  const touchStartX = useRef(0)
-  const touchStartY = useRef(0)
-  const swipeLock = useRef<'h' | 'v' | null>(null)
+  // Swipe left/right on the tab bar to switch tabs
+  const tabBarTouchStartX = useRef(0)
 
-  useEffect(() => {
-    const el = panelsRef.current
-    if (!el) return
-    const onMove = (e: TouchEvent) => {
-      const dx = e.touches[0].clientX - touchStartX.current
-      const dy = e.touches[0].clientY - touchStartY.current
-      if (swipeLock.current === null) {
-        if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.5) swipeLock.current = 'h'
-        else if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx) * 1.5) swipeLock.current = 'v'
-      }
-      if (swipeLock.current === 'h') e.preventDefault()
-    }
-    el.addEventListener('touchmove', onMove, { passive: false })
-    return () => el.removeEventListener('touchmove', onMove)
-  }, [])
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX
-    touchStartY.current = e.touches[0].clientY
-    swipeLock.current = null
+  const onTabBarTouchStart = (e: React.TouchEvent) => {
+    tabBarTouchStartX.current = e.touches[0].clientX
+  }
+  const onTabBarTouchEnd = (e: React.TouchEvent) => {
+    const dx = e.changedTouches[0].clientX - tabBarTouchStartX.current
+    if (dx < -40) setActiveTab(t => Math.min(t + 1, SECTION_ORDER.length - 1))
+    else if (dx > 40) setActiveTab(t => Math.max(t - 1, 0))
   }
 
-  const onTouchEnd = (e: React.TouchEvent) => {
-    if (swipeLock.current !== 'h') return
-    const dx = e.changedTouches[0].clientX - touchStartX.current
-    if (dx < -50) setActiveTab(t => Math.min(t + 1, SECTION_ORDER.length - 1))
-    else if (dx > 50) setActiveTab(t => Math.max(t - 1, 0))
-  }
+  const activeType = SECTION_ORDER[activeTab]
+  const activeSection = sections[activeType]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
@@ -455,8 +408,12 @@ function CategoryDetail({ cat, onBack, onOpenFeed }: CategoryDetailProps) {
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #E8E4DC', flexShrink: 0 }}>
+      {/* Tab bar — tap or swipe left/right to switch */}
+      <div
+        onTouchStart={onTabBarTouchStart}
+        onTouchEnd={onTabBarTouchEnd}
+        style={{ display: 'flex', borderBottom: '1px solid #E8E4DC', flexShrink: 0 }}
+      >
         {SECTION_ORDER.map((type, i) => {
           const active = activeTab === i
           return (
@@ -486,307 +443,42 @@ function CategoryDetail({ cat, onBack, onOpenFeed }: CategoryDetailProps) {
         })}
       </div>
 
-      {/* Swipeable tab panels */}
-      <div
-        ref={panelsRef}
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-        style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}
-      >
-        <div style={{
-          display: 'flex',
-          width: '400%',
-          height: '100%',
-          transform: `translateX(-${activeTab * 25}%)`,
-          transition: 'transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-          willChange: 'transform',
-        }}>
-          {SECTION_ORDER.map(type => {
-            const { works, cards, loading, error } = sections[type]
-            return (
-              <div
-                key={type}
-                style={{ width: '25%', height: '100%', overflowY: 'auto', WebkitOverflowScrolling: 'touch' as any }}
-              >
-                <TabPanel
-                  type={type}
-                  works={works}
-                  cards={cards}
-                  loading={loading}
-                  error={error}
-                  onCardTap={i => onOpenFeed(cat, type, cards, i)}
-                />
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      {/* Feed area — full card swipe feed for the active tab */}
+      {!activeSection.loading && activeSection.works.length === 0 ? (
+        <EmptyTabView type={activeType} />
+      ) : (
+        <CardSwipeFeed
+          key={activeType}
+          cards={activeSection.cards}
+          loading={activeSection.loading}
+          onGoDeeper={onGoDeeper}
+          savedKeys={savedKeys}
+          onToggleSave={onToggleSave}
+          onCardViewed={onCardViewed}
+        />
+      )}
     </div>
   )
 }
 
-// ── TabPanel ───────────────────────────────────────────────────────────────────
+// ── EmptyTabView ───────────────────────────────────────────────────────────────
 
-function TabPanel({ type, works, cards, loading, error, onCardTap }: {
-  type: SectionType
-  works: Work[]
-  cards: CardData[]
-  loading: boolean
-  error: string | null
-  onCardTap: (i: number) => void
-}) {
-  const cols = type === 'talk' ? 2 : 3
-
-  if (loading) {
-    return (
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8, padding: '12px 16px 28px' }}>
-        {Array.from({ length: cols * 3 }).map((_, i) => (
-          <GridCardSkeleton key={i} type={type} />
-        ))}
-      </div>
-    )
-  }
-
-  if (works.length === 0) {
-    return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100%',
-        padding: '0 32px',
-        textAlign: 'center',
-      }}>
-        <div>
-          <div style={{ width: 28, height: 1.5, background: '#E0DCD4', margin: '0 auto 20px' }} />
-          <div style={{
-            fontSize: 14,
-            color: '#bbb',
-            fontFamily: 'Inter, sans-serif',
-            lineHeight: 1.6,
-          }}>
-            No {SECTION_LABELS[type].toLowerCase()} yet<br />in this category.
-          </div>
+function EmptyTabView({ type }: { type: SectionType }) {
+  return (
+    <div style={{
+      flex: 1,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '0 36px',
+      textAlign: 'center',
+    }}>
+      <div>
+        <div style={{ width: 28, height: 1.5, background: '#E0DCD4', margin: '0 auto 20px' }} />
+        <div style={{ fontSize: 14, color: '#bbb', fontFamily: 'Inter, sans-serif', lineHeight: 1.7 }}>
+          No {SECTION_LABELS[type].toLowerCase()} yet<br />in this category.
         </div>
       </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div style={{ padding: '24px 16px' }}>
-        <div style={{ fontSize: 12, color: '#bbb', fontFamily: 'Inter, sans-serif' }}>Failed to load</div>
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 8, padding: '12px 16px 28px' }}>
-      {cards.map((card, i) => (
-        <GridCard key={i} card={card} onTap={() => onCardTap(i)} />
-      ))}
-    </div>
-  )
-}
-
-// ── GridCard ───────────────────────────────────────────────────────────────────
-
-function GridCard({ card, onTap }: { card: CardData; onTap: () => void }) {
-  const [imgFailed, setImgFailed] = useState(false)
-  const [thumbFailed, setThumbFailed] = useState(false)
-  const workType = card.book.type ?? 'book'
-
-  const videoId = workType === 'talk' ? youTubeId(card.book.url) : null
-  const thumbUrl = videoId ? `https://img.youtube.com/vi/${videoId}/mqdefault.jpg` : null
-  const coverUrl = `https://covers.openlibrary.org/b/isbn/${card.book.isbn}-M.jpg`
-
-  const aspectRatio = workType === 'talk' ? '16 / 9' : workType === 'book' ? '2 / 3' : '1 / 1'
-  const bgColor = workType === 'book' ? '#E8E4DC'
-    : workType === 'talk' ? '#1a1a1a'
-    : workType === 'podcast' ? '#F0EBE0'
-    : '#EBF0F5'
-
-  return (
-    <button
-      onClick={onTap}
-      style={{
-        background: 'none',
-        border: 'none',
-        padding: 0,
-        cursor: 'pointer',
-        textAlign: 'left',
-        width: '100%',
-        WebkitTapHighlightColor: 'transparent',
-      }}
-    >
-      {/* Thumbnail */}
-      <div style={{
-        width: '100%',
-        aspectRatio,
-        borderRadius: 3,
-        overflow: 'hidden',
-        background: bgColor,
-        position: 'relative',
-        boxShadow: '0 1px 5px rgba(0,0,0,0.12)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 5,
-      }}>
-        {workType === 'book' && !imgFailed && (
-          <img
-            src={coverUrl}
-            alt=""
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            onError={() => setImgFailed(true)}
-          />
-        )}
-
-        {workType === 'talk' && (
-          <>
-            {!thumbFailed && thumbUrl && (
-              <img
-                src={thumbUrl}
-                alt=""
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                onError={() => setThumbFailed(true)}
-              />
-            )}
-            <div style={{
-              position: 'absolute', inset: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: thumbFailed || !thumbUrl ? 'transparent' : 'rgba(0,0,0,0.16)',
-            }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: '50%',
-                background: 'rgba(255,255,255,0.92)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
-              }}>
-                <div style={{
-                  width: 0, height: 0,
-                  borderStyle: 'solid',
-                  borderWidth: '5px 0 5px 9px',
-                  borderColor: 'transparent transparent transparent #111',
-                  marginLeft: 2,
-                }} />
-              </div>
-            </div>
-          </>
-        )}
-
-        {workType === 'podcast' && (
-          <IconMicrophone size={28} stroke={1.4} color="#bbb" />
-        )}
-
-        {workType === 'article' && (
-          <IconFileText size={26} stroke={1.4} color="#aab5c0" />
-        )}
-      </div>
-
-      {/* Title */}
-      <div style={{
-        fontSize: 10.5,
-        color: '#333',
-        lineHeight: 1.32,
-        fontFamily: 'Inter, sans-serif',
-        fontWeight: 500,
-        overflow: 'hidden',
-        display: '-webkit-box',
-        WebkitLineClamp: 2,
-        WebkitBoxOrient: 'vertical' as any,
-      }}>
-        {card.book.title}
-      </div>
-
-      {/* Author */}
-      <div style={{
-        fontSize: 9.5,
-        color: '#aaa',
-        lineHeight: 1.3,
-        marginTop: 2,
-        fontFamily: 'Inter, sans-serif',
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-      }}>
-        {card.book.author}
-      </div>
-    </button>
-  )
-}
-
-// ── GridCardSkeleton ───────────────────────────────────────────────────────────
-
-function GridCardSkeleton({ type }: { type: SectionType }) {
-  const aspectRatio = type === 'talk' ? '16 / 9' : type === 'book' ? '2 / 3' : '1 / 1'
-  return (
-    <div>
-      <div style={{ width: '100%', aspectRatio, borderRadius: 3, background: '#F0ECE4', marginBottom: 5 }} className="animate-pulse" />
-      <div style={{ height: 9, background: '#F5F3EE', borderRadius: 2, marginBottom: 4, width: '85%' }} className="animate-pulse" />
-      <div style={{ height: 8, background: '#F5F3EE', borderRadius: 2, width: '55%' }} className="animate-pulse" />
-    </div>
-  )
-}
-
-// ── FeedView ───────────────────────────────────────────────────────────────────
-
-interface FeedViewProps {
-  cat: Category
-  sectionType: SectionType
-  cards: CardData[]
-  startIndex: number
-  onBack: () => void
-  onGoDeeper?: (card: CardData) => void
-  savedKeys?: Set<string>
-  onToggleSave?: (card: CardData) => void
-  onCardViewed?: (card: CardData) => void
-}
-
-function FeedView({ cat, sectionType, cards, startIndex, onBack, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: FeedViewProps) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-      <div style={{
-        padding: '52px 20px 11px',
-        borderBottom: '2px solid #111',
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'flex-end',
-        justifyContent: 'space-between',
-        gap: 12,
-      }}>
-        <button
-          onClick={onBack}
-          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#111', display: 'flex', alignItems: 'center', flexShrink: 0, marginBottom: 2 }}
-        >
-          <IconArrowLeft size={18} stroke={1.8} />
-        </button>
-
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#bbb', fontFamily: 'Inter, sans-serif', marginBottom: 3 }}>
-            {SECTION_LABELS[sectionType]}
-          </div>
-          <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 18, fontWeight: 700, color: '#111', letterSpacing: '-0.3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {cat.title}
-          </div>
-        </div>
-
-        <div style={{ textAlign: 'right', flexShrink: 0, marginBottom: 3 }}>
-          <div style={{ fontSize: 11, color: '#aaa', fontWeight: 500 }}>
-            {cards.length} card{cards.length !== 1 ? 's' : ''}
-          </div>
-        </div>
-      </div>
-
-      <CardSwipeFeed
-        cards={cards}
-        loading={false}
-        initialIndex={startIndex}
-        onGoDeeper={onGoDeeper}
-        savedKeys={savedKeys}
-        onToggleSave={onToggleSave}
-        onCardViewed={onCardViewed}
-      />
     </div>
   )
 }
