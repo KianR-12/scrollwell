@@ -94,7 +94,6 @@ export function OnboardingFlow({ onGuest, onGoToAuth }: Props) {
   function savePrefs() {
     localStorage.setItem('sw_interests', JSON.stringify([...interests]))
     localStorage.setItem('sw_formats', JSON.stringify([...formats]))
-    localStorage.setItem('sw_onboarded', 'true')
   }
 
   async function handleSignUp(e: React.FormEvent) {

@@ -49,17 +49,16 @@ function AuthGate() {
   const { user, loading, signOut } = useAuth()
   const [guest, setGuest] = useState(false)
   const [showAuth, setShowAuth] = useState(false)
-  const hasOnboarded = localStorage.getItem('sw_onboarded') === 'true'
 
   if (loading) return <Splash />
   if (user) return <AppShell userId={user.id} email={user.email} onSignOut={signOut} />
   if (guest) return <AppShell userId={GUEST_USER_ID} isGuest onSignOut={() => setGuest(false)} />
 
-  if (showAuth || hasOnboarded) {
+  if (showAuth) {
     return (
       <AuthScreen
         onSkip={() => setGuest(true)}
-        onBack={showAuth && !hasOnboarded ? () => setShowAuth(false) : undefined}
+        onBack={() => setShowAuth(false)}
       />
     )
   }
