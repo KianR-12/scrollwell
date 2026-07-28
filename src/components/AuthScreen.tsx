@@ -7,9 +7,10 @@ export const GUEST_USER_ID = '00000000-0000-0000-0000-000000000001'
 
 interface Props {
   onSkip: () => void
+  onBack?: () => void
 }
 
-export function AuthScreen({ onSkip }: Props) {
+export function AuthScreen({ onSkip, onBack }: Props) {
   const [mode, setMode] = useState<Mode>('signin')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -61,9 +62,22 @@ export function AuthScreen({ onSkip }: Props) {
     }}>
       {/* Masthead */}
       <div style={{
-        padding: '64px 28px 0',
+        padding: `${onBack ? 52 : 64}px 28px 0`,
         flexShrink: 0,
       }}>
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: '#111', padding: '0 0 16px',
+              fontSize: 24, lineHeight: 1, fontFamily: 'Inter, sans-serif',
+              display: 'block',
+            }}
+          >
+            ‹
+          </button>
+        )}
         {/* Rules + wordmark */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <div style={{ flex: 1, height: 1.5, background: '#111' }} />

@@ -7,6 +7,7 @@ import { LibraryTab } from './components/LibraryTab'
 // import { TrendingTab } from './components/TrendingTab'
 import { ProfileTab } from './components/ProfileTab'
 import { AuthScreen, GUEST_USER_ID } from './components/AuthScreen'
+import { OnboardingFlow } from './components/OnboardingFlow'
 import { useCards } from './useCards'
 import { useSavedCards } from './useSavedCards'
 import { useAuth } from './useAuth'
@@ -47,11 +48,28 @@ export default function App() {
 function AuthGate() {
   const { user, loading, signOut } = useAuth()
   const [guest, setGuest] = useState(false)
+  const [showAuth, setShowAuth] = useState(false)
+  const hasOnboarded = localStorage.getItem('sw_onboarded') === 'true'
 
   if (loading) return <Splash />
+  if (user) return <AppShell userId={user.id} email={user.email} onSignOut={signOut} />
   if (guest) return <AppShell userId={GUEST_USER_ID} isGuest onSignOut={() => setGuest(false)} />
-  if (!user) return <AuthScreen onSkip={() => setGuest(true)} />
-  return <AppShell userId={user.id} email={user.email} onSignOut={signOut} />
+
+  if (showAuth || hasOnboarded) {
+    return (
+      <AuthScreen
+        onSkip={() => setGuest(true)}
+        onBack={showAuth && !hasOnboarded ? () => setShowAuth(false) : undefined}
+      />
+    )
+  }
+
+  return (
+    <OnboardingFlow
+      onGuest={() => setGuest(true)}
+      onGoToAuth={() => setShowAuth(true)}
+    />
+  )
 }
 
 function AppShell({ userId, email, isGuest = false, onSignOut }: { userId: string; email?: string; isGuest?: boolean; onSignOut: () => void }) {
