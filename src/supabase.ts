@@ -150,6 +150,92 @@ export interface TrendingCard {
   saveCount: number
 }
 
+// ── Moments ────────────────────────────────────────────────────────────────────
+// Run this once in the Supabase SQL editor:
+//
+// create table moments (
+//   id uuid primary key default gen_random_uuid(),
+//   user_id uuid references auth.users not null,
+//   card_id uuid references cards(id) not null,
+//   dropped_at timestamptz not null default now(),
+//   context text,
+//   rating text check (rating in ('tanked','landed','killed_it')) not null,
+//   note text,
+//   created_at timestamptz not null default now()
+// );
+// alter table moments enable row level security;
+// create policy "Users manage own moments" on moments
+//   for all using (auth.uid() = user_id);
+
+export type MomentRating = 'tanked' | 'landed' | 'killed_it'
+
+export interface MomentWithCard {
+  id: string
+  card_id: string
+  card: CardData
+  dropped_at: string
+  context: string | null
+  rating: MomentRating
+  note: string | null
+  created_at: string
+}
+
+export async function logMoment(
+  userId: string,
+  card: CardData,
+  rating: MomentRating,
+  opts?: { context?: string; note?: string; droppedAt?: Date },
+): Promise<void> {
+  const cardId = await saveCardToDb(card, card.book.type ?? 'book')
+  if (!cardId) return
+  await supabase.from('moments').insert({
+    user_id: userId,
+    card_id: cardId,
+    dropped_at: (opts?.droppedAt ?? new Date()).toISOString(),
+    context: opts?.context?.trim() || null,
+    rating,
+    note: opts?.note?.trim() || null,
+  })
+}
+
+export async function fetchMoments(userId: string): Promise<MomentWithCard[]> {
+  const { data } = await supabase
+    .from('moments')
+    .select(`id, card_id, dropped_at, context, rating, note, created_at,
+      cards!moments_card_id_fkey(title,creator,category,hook,hook_sub,gist,isbn,year,pages,social_count,type,url)`)
+    .eq('user_id', userId)
+    .order('dropped_at', { ascending: false })
+  return (data ?? []).flatMap((row: any) => {
+    const c = row.cards
+    if (!c) return []
+    return [{ id: row.id, card_id: row.card_id, card: dbRowToCard(c as DbRow), dropped_at: row.dropped_at, context: row.context, rating: row.rating as MomentRating, note: row.note, created_at: row.created_at }]
+  })
+}
+
+export async function fetchBestDrops(userId: string): Promise<MomentWithCard[]> {
+  const { data } = await supabase
+    .from('moments')
+    .select(`id, card_id, dropped_at, context, rating, note, created_at,
+      cards!moments_card_id_fkey(title,creator,category,hook,hook_sub,gist,isbn,year,pages,social_count,type,url)`)
+    .eq('user_id', userId)
+    .eq('rating', 'killed_it')
+    .order('dropped_at', { ascending: false })
+    .limit(5)
+  return (data ?? []).flatMap((row: any) => {
+    const c = row.cards
+    if (!c) return []
+    return [{ id: row.id, card_id: row.card_id, card: dbRowToCard(c as DbRow), dropped_at: row.dropped_at, context: row.context, rating: row.rating as MomentRating, note: row.note, created_at: row.created_at }]
+  })
+}
+
+export async function fetchDroppedCount(userId: string): Promise<number> {
+  const { count } = await supabase
+    .from('moments')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+  return count ?? 0
+}
+
 export async function fetchTrending(): Promise<TrendingCard[]> {
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 

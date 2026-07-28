@@ -11,9 +11,10 @@ interface Props {
   savedKeys?: Set<string>
   onToggleSave?: (card: CardData) => void
   onCardViewed?: (card: CardData) => void
+  onDropped?: (card: CardData) => void
 }
 
-export function CardSwipeFeed({ cards, loading, initialIndex, onIndexChange, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: Props) {
+export function CardSwipeFeed({ cards, loading, initialIndex, onIndexChange, onGoDeeper, savedKeys, onToggleSave, onCardViewed, onDropped }: Props) {
   const [index, setIndex] = useState(initialIndex ?? 0)
   // Keep a ref so the reset effect always sees the latest initialIndex value
   const initialIndexRef = useRef(initialIndex ?? 0)
@@ -144,8 +145,8 @@ export function CardSwipeFeed({ cards, loading, initialIndex, onIndexChange, onG
                 card={card}
                 index={i}
                 total={total}
-                saved={saved.has(i)}
-                onSave={() => {
+                loaded={saved.has(i)}
+                onLoad={() => {
                   setSaved(prev => {
                     const next = new Set(prev)
                     next.has(i) ? next.delete(i) : next.add(i)
@@ -154,6 +155,7 @@ export function CardSwipeFeed({ cards, loading, initialIndex, onIndexChange, onG
                   onToggleSave?.(card)
                 }}
                 onGoDeeper={() => onGoDeeper?.(card)}
+                onDropped={() => onDropped?.(card)}
               />
             </div>
           )

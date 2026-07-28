@@ -52,9 +52,10 @@ interface ExploreProps {
   savedKeys?: Set<string>
   onToggleSave?: (card: CardData) => void
   onCardViewed?: (card: CardData) => void
+  onDropped?: (card: CardData) => void
 }
 
-export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }: ExploreProps) {
+export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed, onDropped }: ExploreProps) {
   const [view, setView] = useState<ExploreView>({ kind: 'grid' })
 
   async function handleSearch(query: string) {
@@ -85,6 +86,7 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
         savedKeys={savedKeys}
         onToggleSave={onToggleSave}
         onCardViewed={onCardViewed}
+        onDropped={onDropped}
       />
     )
   }
@@ -98,6 +100,7 @@ export function ExploreTab({ onGoDeeper, savedKeys, onToggleSave, onCardViewed }
         savedKeys={savedKeys}
         onToggleSave={onToggleSave}
         onCardViewed={onCardViewed}
+        onDropped={onDropped}
       />
     )
   }
@@ -123,9 +126,10 @@ interface SearchResultProps {
   savedKeys?: Set<string>
   onToggleSave?: (card: CardData) => void
   onCardViewed?: (card: CardData) => void
+  onDropped?: (card: CardData) => void
 }
 
-function SearchResultView({ query, card, loading, error, onBack, onRetry, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: SearchResultProps) {
+function SearchResultView({ query, card, loading, error, onBack, onRetry, onGoDeeper, savedKeys, onToggleSave, onCardViewed, onDropped }: SearchResultProps) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       <div style={{
@@ -192,6 +196,7 @@ function SearchResultView({ query, card, loading, error, onBack, onRetry, onGoDe
           savedKeys={savedKeys}
           onToggleSave={onToggleSave}
           onCardViewed={onCardViewed}
+          onDropped={onDropped}
         />
       )}
     </div>
@@ -341,9 +346,10 @@ interface CategoryDetailProps {
   savedKeys?: Set<string>
   onToggleSave?: (card: CardData) => void
   onCardViewed?: (card: CardData) => void
+  onDropped?: (card: CardData) => void
 }
 
-function CategoryDetail({ cat, onBack, onGoDeeper, savedKeys, onToggleSave, onCardViewed }: CategoryDetailProps) {
+function CategoryDetail({ cat, onBack, onGoDeeper, savedKeys, onToggleSave, onCardViewed, onDropped }: CategoryDetailProps) {
   const allWorks = CONTENT_LIBRARY[cat.title] ?? []
   const [activeTab, setActiveTab] = useState(0)
 
@@ -472,6 +478,7 @@ function CategoryDetail({ cat, onBack, onGoDeeper, savedKeys, onToggleSave, onCa
           savedKeys={savedKeys}
           onToggleSave={onToggleSave}
           onCardViewed={onCardViewed}
+          onDropped={onDropped}
         />
       )}
     </div>

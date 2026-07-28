@@ -7,9 +7,10 @@ import type { CardData } from '../useCards'
 interface Props {
   userId: string
   onToggleSave: (card: CardData) => void
+  onDropped?: (card: CardData) => void
 }
 
-export function LibraryTab({ userId, onToggleSave }: Props) {
+export function LibraryTab({ userId, onToggleSave, onDropped }: Props) {
   const [entries, setEntries] = useState<SavedCard[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<SavedCard | null>(null)
@@ -35,7 +36,7 @@ export function LibraryTab({ userId, onToggleSave }: Props) {
       {/* Header */}
       <div style={{ padding: '52px 20px 11px', borderBottom: '2px solid #111', flexShrink: 0 }}>
         <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: '#111', letterSpacing: '-0.3px' }}>
-          Library
+          Arsenal
         </div>
       </div>
 
@@ -46,10 +47,10 @@ export function LibraryTab({ userId, onToggleSave }: Props) {
         flexShrink: 0,
       }}>
         {[
-          { label: 'Read',    value: '0'  },
-          { label: 'Saved',   value: loading ? '—' : String(entries.length) },
-          { label: 'Dropped', value: '0'  },
-          { label: 'Streak',  value: '1'  },
+          { label: 'Absorbed', value: '0'  },
+          { label: 'Loaded',   value: loading ? '—' : String(entries.length) },
+          { label: 'Dropped',  value: '0'  },
+          { label: 'Streak',   value: '1'  },
         ].map(({ label, value }, i, arr) => (
           <div
             key={label}
@@ -89,10 +90,13 @@ export function LibraryTab({ userId, onToggleSave }: Props) {
         {loading && <ListSkeleton />}
 
         {!loading && entries.length === 0 && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 20px' }}>
-            <span style={{ fontSize: 11, color: '#ccc', letterSpacing: '1px', textTransform: 'uppercase', fontWeight: 600 }}>
-              Nothing saved yet
-            </span>
+          <div style={{ padding: '52px 24px', textAlign: 'center' }}>
+            <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 16, fontWeight: 700, color: '#111', marginBottom: 8, lineHeight: 1.3 }}>
+              No drops loaded yet.
+            </div>
+            <div style={{ fontSize: 12.5, color: '#aaa', fontFamily: 'Inter, sans-serif', lineHeight: 1.6 }}>
+              Your best material starts here. Tap "Load" on any drop to add it to your Arsenal.
+            </div>
           </div>
         )}
 
@@ -111,6 +115,7 @@ export function LibraryTab({ userId, onToggleSave }: Props) {
           entry={selected}
           onClose={() => setSelected(null)}
           onUnsave={() => handleUnsave(selected.card)}
+          onDropped={onDropped ? () => onDropped(selected.card) : undefined}
         />
       )}
     </div>
@@ -203,10 +208,12 @@ function LibraryCardOverlay({
   entry,
   onClose,
   onUnsave,
+  onDropped,
 }: {
   entry: SavedCard
   onClose: () => void
   onUnsave: () => void
+  onDropped?: () => void
 }) {
   const [entered, setEntered] = useState(false)
   const [closing, setClosing] = useState(false)
@@ -262,14 +269,14 @@ function LibraryCardOverlay({
         </button>
       </div>
 
-      {/* Card — reuse CardView; onSave = unsave + close */}
       <CardView
         card={entry.card}
         index={0}
         total={1}
-        saved={true}
-        onSave={onUnsave}
+        loaded={true}
+        onLoad={onUnsave}
         onGoDeeper={undefined}
+        onDropped={onDropped}
       />
     </div>
   )

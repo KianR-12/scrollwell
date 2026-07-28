@@ -143,7 +143,7 @@ export function OnboardingFlow({ onGuest, onGoToAuth }: Props) {
             </div>
 
             <h1 style={{ ...HEADLINE, fontSize: 34, lineHeight: 1.1 }}>
-              Ideas worth dropping in conversation.
+              The drops that make you interesting.
             </h1>
 
             <div style={{
@@ -160,7 +160,7 @@ export function OnboardingFlow({ onGuest, onGoToAuth }: Props) {
                 color: '#888',
                 margin: 0,
               }}>
-                The only reading app built around forgetting less.
+                Conversation ammunition, delivered daily.
               </p>
             </div>
           </div>
@@ -194,17 +194,17 @@ export function OnboardingFlow({ onGuest, onGoToAuth }: Props) {
         <Scr>
           <Hdr step={1} onBack={prev} />
           <div style={{ flex: 1, padding: '24px 28px 0', overflowY: 'auto' }}>
-            <h1 style={HEADLINE}>Not just another reading app.</h1>
+            <h1 style={HEADLINE}>Not just reading. Ammunition.</h1>
 
             <div style={{ display: 'flex', justifyContent: 'center', margin: '32px 0 28px' }}>
               <BookIllust />
             </div>
 
             <p style={BODY}>
-              Most apps want you to read more. scrollwell wants you to retain more.
+              Not just reading. Ammunition for real conversations.
             </p>
             <p style={{ ...BODY, marginTop: 16 }}>
-              Every card distills one insight from a book, talk, podcast, or article — delivered in 60 seconds and designed to stick.
+              Every drop distills one sharp insight — the kind you actually use at dinner, in a meeting, or mid-text thread.
             </p>
           </div>
           <Ftr>
@@ -220,18 +220,18 @@ export function OnboardingFlow({ onGuest, onGoToAuth }: Props) {
             <div style={{ marginTop: 36, display: 'flex', flexDirection: 'column', gap: 30 }}>
               <FeatRow
                 num="①"
-                title="One insight, one card"
-                body="Designed to be consumed in 60 seconds."
+                title="One drop, one insight"
+                body="Designed to be absorbed in 60 seconds."
               />
               <FeatRow
                 num="②"
-                title="Picked for your interests"
-                body="The feed adapts to the topics you care about."
+                title="Three drops a day. Yours."
+                body="Personalized to your interests — no algorithm noise."
               />
               <FeatRow
                 num="③"
-                title="Built to be remembered"
-                body="Quotes, stats, and frameworks — the kind of thing you actually tell someone later."
+                title="Use it. Log it."
+                body="When you drop it in a real conversation, mark it. That's what this is for."
               />
             </div>
           </div>
